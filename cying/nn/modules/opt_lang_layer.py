@@ -15,9 +15,7 @@ class OptLangLayer(nn.Module):
         self.hid_width = hid_width
         self.d_head = d_model // n_head
 
-        self.q_linear = nn.Linear(d_model,d_model,bias=False)
-        self.k_linear = nn.Linear(d_model,d_model,bias=False)
-        self.v_linear = nn.Linear(d_model,d_model,bias=False)
+        self.h_linear = nn.Linear(d_model,d_model,bias=False)
         self.qk_weight = nn.Parameter(torch.stack([torch.ones(n_head,self.d_head//2+1),torch.zeros(n_head,self.d_head//2+1)],dim=-1))
         self.att_linear = nn.Linear(d_model,d_model,bias=False)
 
@@ -71,14 +69,10 @@ class OptLangLayer(nn.Module):
         self,
         token_seq
     ):
-        q = self.q_linear(token_seq).view(*token_seq.shape[:2],self.n_head,self.d_head)
-        k = self.k_linear(token_seq).view(*token_seq.shape[:2],self.n_head,self.d_head)
+        qkv = self.h_linear(token_seq).view(*token_seq.shape[:2],self.n_head,self.d_head)
         
-        q_fre = torch.fft.rfft(q) / self.d_head
-        k_fre = torch.fft.rfft(k) / self.d_head
+        qkv_fre = torch.fft.rfft(qkv) / self.d_head
 
-        s = torch.einsum('b t n d, n d, b s n d -> n b t s', q_fre, torch.view_as_complex(self.qk_weight), k_fre.conj()).real
+        s = torch.einsum('b t n d, n d, b s n d -> n b t s', qkv_fre, torch.view_as_complex(self.qk_weight), qkv_fre.conj()).real
 
-        v = self.v_linear(token_seq).view(*token_seq.shape[:2],self.n_head,self.d_head)
-
-        return s, v
+        return s, qkv
