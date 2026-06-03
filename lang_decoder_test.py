@@ -103,7 +103,7 @@ for i in range(epoch):
         tgt_ids = tgt_ids.to(device)
         outputs = opt_lang_model(
             token_seq=token_ids,
-            casual_mask=torch.triu(torch.ones(max_seq_len, max_seq_len), diagonal=1).bool().to(device)
+            causal_mask=torch.triu(torch.ones(max_seq_len, max_seq_len), diagonal=1).bool().to(device)
         )
         loss = criterion(
             outputs.view(-1, outputs.size(-1)),
@@ -128,7 +128,7 @@ for i in range(epoch):
             tgt_ids = tgt_ids.to(device)
             outputs = opt_lang_model(
                 token_seq=token_ids,
-                casual_mask=torch.triu(torch.ones(max_seq_len, max_seq_len), diagonal=1).bool().to(device)
+                causal_mask=torch.triu(torch.ones(max_seq_len, max_seq_len), diagonal=1).bool().to(device)
             )
             loss = criterion(
                 outputs.view(-1, outputs.size(-1)),
