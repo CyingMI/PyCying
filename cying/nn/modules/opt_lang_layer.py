@@ -28,15 +28,15 @@ class OptLangLayer(nn.Module):
         self.d_head = d_model // num_heads
 
         self.h_linear = nn.Linear(d_model, d_model, bias=False)
-        self.qk_weight = nn.Parameter(
-            torch.stack(
-                [
-                    torch.ones(num_heads, self.d_head // 2 + 1),
-                    torch.zeros(num_heads, self.d_head // 2 + 1),
-                ],
-                dim=-1,
-            )
+        qk_weight = torch.stack(
+            [
+                torch.ones(num_heads, self.d_head // 2 + 1),
+                torch.zeros(num_heads, self.d_head // 2 + 1),
+            ],
+            dim=-1,
         )
+        self.qk_weight = nn.Parameter(qk_weight)
+
         self.att_linear = nn.Linear(d_model, d_model, bias=False)
 
         self.register_buffer(
@@ -50,7 +50,7 @@ class OptLangLayer(nn.Module):
             nn.Linear(self.hidden_width, self.d_model),
         )
 
-        self.memory = None
+        self.norm = nn.RMSNorm(d_model, elementwise_affine=False)
 
     def forward(
         self,
@@ -68,13 +68,15 @@ class OptLangLayer(nn.Module):
         Returns:
             Tensor: 输出特征，形状为 (B, L, D)。
         """
-        token_att = self._multi_head_attention(
+        token_att = self.norm(self._multi_head_attention(
             token_seq,
             padding_mask,
             causal_mask,
-        )
+        ) + token_seq)
 
-        return self.nonlinear(token_att)
+        token_out = self.norm(self.nonlinear(token_att) + token_att)
+        
+        return token_out
 
     def _multi_head_attention(
         self,
@@ -123,20 +125,20 @@ class OptLangLayer(nn.Module):
             )[..., None, None] / self.theta[None, None, :]
         )
 
-        qkv = self.h_linear(token_seq).view(
+        token_seq = self.h_linear(token_seq).view(
             batch_size,
             seq_len,
             self.num_heads,
-            self.d_head,
+            self.d_head
         )
 
-        qk_freq = torch.fft.rfft(qkv) * position_embeddings / self.d_head
+        qk_freq = torch.fft.rfft(token_seq) * position_embeddings / self.d_head
 
         scores = torch.einsum(
             "b t n d, n d, b s n d -> n b t s",
             qk_freq,
             torch.view_as_complex(self.qk_weight),
-            qk_freq.conj(),
+            qk_freq.conj()
         ).real
 
-        return scores, qkv
+        return scores, token_seq
