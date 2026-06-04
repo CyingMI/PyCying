@@ -3,7 +3,6 @@
 本模块定义了一个基于 `OptLangLayer` 的语言模型架构，使用嵌入层、
 归一化、注意力残差来生成最终的词表概率输出。
 """
-
 import torch
 import torch.nn as nn
 from .opt_lang_layer import OptLangLayer
@@ -35,7 +34,7 @@ class OptLangModel(nn.Module):
         self.num_layers = num_layers
 
         # 输入嵌入层，将 token id 映射到模型维度向量
-        self.embedding = nn.Embedding(vocab_size, d_model)
+        self.embedding = nn.Embedding(vocab_size, d_model, max_norm = d_model ** 0.5)
 
         # 逐层堆叠的 OptLangLayer
         self.layers = nn.ModuleList(
@@ -100,6 +99,4 @@ class OptLangModel(nn.Module):
             token_seq[-1] = sum(
                 token_seq[j] * scores[..., j:j + 1] for j in range(i * 2 + 3)
             )
-
-        # 输出最终 logits
         return self.linear_out(self.norm(token_seq[-1]))
