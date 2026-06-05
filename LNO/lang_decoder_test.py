@@ -71,7 +71,7 @@ class Trans2019(Dataset):
     def __len__(self):
         return len(self.data_english) // batch_size * batch_size
 
-tokenizer = Tokenizer.from_file("../cying/datasets/tokenizer-wiki.json")
+tokenizer = Tokenizer.from_file("../cying/datasets/translation2019zh/tokenizer.json")
 trans_dataset = Trans2019(
     filepath=f'../cying/datasets/translation2019zh/translation2019zh_train.json',
     tokenizer=tokenizer,
