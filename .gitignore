@@ -2,3 +2,5 @@
 datasets/
 __pycache__/
 models/
+PNO/
+VNO/

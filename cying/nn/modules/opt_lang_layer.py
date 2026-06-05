@@ -1,18 +1,19 @@
-"""算子语言层模块。
+"""Operator language layer module.
 
-本模块定义了单层优化语言层，包含多头频域注意力和非线性变换。
+This module defines a single optimized language layer that includes
+multi-head frequency-domain attention and a nonlinear transformation.
 """
 import torch
 import torch.nn as nn
 
 
 class OptLangLayer(nn.Module):
-    """算子语言层。
+    """Operator language layer.
 
-    参数:
-        d_model (int): 模型维度。
-        num_heads (int): 注意力头数量。
-        hidden_width (int): 非线性层隐藏维度。
+    Args:
+        d_model (int): Model dimension.
+        num_heads (int): Number of attention heads.
+        hidden_width (int): Hidden dimension for nonlinear layer.
     """
 
     def __init__(
@@ -58,15 +59,15 @@ class OptLangLayer(nn.Module):
         padding_mask,
         causal_mask
     ):
-        """前向计算。
+        """Forward function.
 
         Args:
-            token_seq (Tensor): 输入特征，形状为 (B, L, D)。
-            padding_mask (Tensor): 填充掩码。
-            causal_mask (Tensor): 因果掩码。
+            token_seq (Tensor): Input features with shape (B, L, D).
+            padding_mask (Tensor): Padding mask.
+            causal_mask (Tensor): Causal mask.
 
         Returns:
-            Tensor: 输出特征，形状为 (B, L, D)。
+            Tensor: Output features with shape (B, L, D).
         """
         token_att = self.norm(self._multi_head_attention(
             token_seq,
@@ -84,7 +85,7 @@ class OptLangLayer(nn.Module):
         padding_mask,
         causal_mask
     ):
-        """计算多头注意力结果。"""
+        """Compute multi-head attention result."""
         batch_size, seq_len, _ = token_seq.shape
 
         scores, values = self._get_score_value(token_seq)
@@ -114,7 +115,7 @@ class OptLangLayer(nn.Module):
         self,
         token_seq
     ):
-        """生成注意力分数和 value 特征。"""
+        """Generate attention scores and value features."""
         batch_size, seq_len, _ = token_seq.shape
 
         position_embeddings = torch.exp(
