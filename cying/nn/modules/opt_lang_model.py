@@ -1,7 +1,8 @@
-"""算子语言模型模块。
+"""Operator language model module.
 
-本模块定义了一个基于 `OptLangLayer` 的语言模型架构，使用嵌入层、
-归一化、注意力残差来生成最终的词表概率输出。
+This module defines a language model architecture based on
+`OptLangLayer`. It uses an embedding layer, normalization and
+attention residuals to produce final logits over the vocabulary.
 """
 import torch
 import torch.nn as nn
@@ -9,14 +10,14 @@ from .opt_lang_layer import OptLangLayer
 
 
 class OptLangModel(nn.Module):
-    """算子语言模型类。
+    """Operator language model.
 
-    参数:
-        vocab_size (int): 词表大小。
-        d_model (int): 模型嵌入维度。
-        num_heads (int): 多头注意力头数。
-        hidden_width (int): 非线性层隐藏维度。
-        num_layers (int): 堆叠层数。
+    Args:
+        vocab_size (int): Vocabulary size.
+        d_model (int): Model embedding dimension.
+        num_heads (int): Number of attention heads.
+        hidden_width (int): Hidden dimension for nonlinear layers.
+        num_layers (int): Number of stacked layers.
     """
 
     def __init__(
@@ -33,18 +34,18 @@ class OptLangModel(nn.Module):
         self.hidden_width = hidden_width
         self.num_layers = num_layers
 
-        # 输入嵌入层，将 token id 映射到模型维度向量
-        self.embedding = nn.Embedding(vocab_size, d_model, max_norm = d_model ** 0.5)
+        # Input embedding layer: map token ids to model-dimension vectors
+        self.embedding = nn.Embedding(
+            vocab_size, d_model, max_norm=d_model ** 0.5
+        )
 
-        # 逐层堆叠的 OptLangLayer
+        # Stack of OptLangLayer instances
         self.layers = nn.ModuleList(
             [OptLangLayer(d_model, num_heads, hidden_width) for _ in range(num_layers)]
         )
 
-        # 注意力残差连接的查询权重
-        self.q_weights = nn.Parameter(
-            torch.zeros((num_layers * 2, d_model))
-        )
+        # Query weights for attention residual connections
+        self.q_weights = nn.Parameter(torch.zeros((num_layers * 2, d_model)))
         self.norm = nn.RMSNorm(d_model, elementwise_affine=False)
 
         # 输出线性层，将模型维度映射回词表大小
@@ -56,28 +57,29 @@ class OptLangModel(nn.Module):
         padding_mask=None,
         causal_mask=None,
     ):
-        """模型前向计算。
+        """Forward function.
 
         Args:
-            token_seq (Tensor): 输入 token id 序列，形状为 (batch, seq_len)。
-            padding_mask (Tensor, optional): 用于遮蔽填充位置的注意力掩码。
-            causal_mask (Tensor, optional): 因果注意力掩码，用于自回归建模。
+            token_seq (Tensor): Input token id sequence of shape (batch, seq_len).
+            padding_mask (Tensor, optional): Attention mask for padding positions.
+            causal_mask (Tensor, optional): Causal mask for autoregressive modeling.
 
         Returns:
-            Tensor: 输出 logits，形状为 (batch, seq_len, vocab_size)。
+            Tensor: Output logits of shape (batch, seq_len, vocab_size).
         """
-        # 先进行词嵌入
+
+        # Embed tokens
         token_seq = [self.embedding(token_seq)]
 
         for i in range(self.num_layers):
-            # 计算当前序列的注意力输入和输出
+            # Compute normalized attention input and attention output
             att_input = self.norm(token_seq[-1])
             att_output = self.layers[i]._multi_head_attention(
                 att_input, padding_mask, causal_mask
             )
             token_seq.append(att_output)
 
-            # 用当前层的注意力输出与历史状态进行混合
+            # Mix attention output with previous states
             weights = []
             for j in range(i * 2 + 2):
                 weights.append(self.norm(token_seq[j]) @ self.q_weights[i * 2])
@@ -86,12 +88,12 @@ class OptLangModel(nn.Module):
                 token_seq[j] * scores[..., j:j + 1] for j in range(i * 2 + 2)
             )
 
-            # 经过非线性层变换
+            # Apply nonlinear transformation
             nonlin_input = self.norm(token_seq[-1])
             nonlin_output = self.layers[i].nonlinear(nonlin_input)
             token_seq.append(nonlin_output)
 
-            # 再次混合非线性输出与当前历史状态
+            # Mix nonlinear output with historical states
             weights = []
             for j in range(i * 2 + 3):
                 weights.append(self.norm(token_seq[j]) @ self.q_weights[i * 2 + 1])
@@ -99,4 +101,5 @@ class OptLangModel(nn.Module):
             token_seq[-1] = sum(
                 token_seq[j] * scores[..., j:j + 1] for j in range(i * 2 + 3)
             )
+
         return self.linear_out(self.norm(token_seq[-1]))
