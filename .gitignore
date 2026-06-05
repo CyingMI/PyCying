@@ -1,5 +1,5 @@
 .vscode/
-datasets/
+translation2019zh/
 __pycache__/
 models/
 PNO/
