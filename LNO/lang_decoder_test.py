@@ -1,5 +1,10 @@
+import sys
+import os
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import torch
-import cying.nn as cynn
+from cying import nn as cynn
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 from torchinfo import summary
@@ -66,9 +71,9 @@ class Trans2019(Dataset):
     def __len__(self):
         return len(self.data_english) // batch_size * batch_size
 
-tokenizer = Tokenizer.from_file("./cying/datasets/tokenizer-wiki.json")
+tokenizer = Tokenizer.from_file("../cying/datasets/tokenizer-wiki.json")
 trans_dataset = Trans2019(
-    filepath=f'./cying/datasets/translation2019zh/translation2019zh_train.json',
+    filepath=f'../cying/datasets/translation2019zh/translation2019zh_train.json',
     tokenizer=tokenizer,
     seq_len=max_seq_len
 )
@@ -78,7 +83,7 @@ train_loader = DataLoader(
     shuffle=True
 )
 valid_dataset = Trans2019(
-    filepath=f'./cying/datasets/translation2019zh/translation2019zh_valid.json',
+    filepath=f'../cying/datasets/translation2019zh/translation2019zh_valid.json',
     tokenizer=tokenizer,
     seq_len=max_seq_len
 )
@@ -119,7 +124,7 @@ for i in range(epoch):
         pbar.set_description(f"Epoch {i+1}/{epoch} Loss {loss.item()*scale:.4e}")
         j += 1
         if j % 1000 == 0:
-            torch.save(opt_lang_model,'./models/model.pth')
+            torch.save(opt_lang_model,'../models/model.pth')
     with torch.no_grad():
         opt_lang_model.eval()
         pbar = tqdm(valid_loader)
