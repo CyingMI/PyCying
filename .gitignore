@@ -1,5 +1,6 @@
 .vscode/
 translation2019zh/
+llm/
 __pycache__/
 models/
 PNO/
