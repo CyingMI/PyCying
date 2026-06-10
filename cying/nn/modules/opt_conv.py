@@ -1,7 +1,6 @@
 '''
 Operator Convolutional Layers
 '''
-import math
 import torch
 import torch.nn as nn
 from .. import functional as F
@@ -14,7 +13,7 @@ class BaseOptConv(nn.Module):
         self.in_channels = in_channels
         self.kernel_size = self._modify_kernel_size(kernel_size)
         self.padding = tuple((s-1)//2 for s in self.kernel_size for _ in range(2))
-        self.weight = nn.Parameter(torch.zeros([in_channels,*self.kernel_size]),requires_grad=True)
+        self.opt_weight = nn.Parameter(torch.zeros([in_channels,*self.kernel_size]),requires_grad=True)
 
     def _modify_kernel_size(self, size):
         raise NotImplementedError
@@ -23,7 +22,7 @@ class BaseOptConv(nn.Module):
         raise NotImplementedError
     
     def forward(self, input):
-        return self._get_conv_function()(input,self.weight,self.size)
+        return self._get_conv_function()(input,self.opt_weight,self.size)
 
 
 class OptConv1d(BaseOptConv):

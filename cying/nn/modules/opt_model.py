@@ -11,6 +11,9 @@ class BaseModel(nn.Module):
 
     def _create_opt_net(self):
         raise NotImplementedError
+    
+    def _get_opt_weight(self):
+        return [p for name, p in self.named_parameters() if 'opt_weight' in name]
 
     def forward(self, input):
         return self.opt_net(input)

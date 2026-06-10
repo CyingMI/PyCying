@@ -1,5 +1,8 @@
 .vscode/
 translation2019zh/
+FIVES/
+ILSVRC2012_img/
+llm/
 __pycache__/
 models/
 PNO/
