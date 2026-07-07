@@ -1,8 +1,7 @@
 import math
-import torch
 import torch.nn.functional as F
 
-def opt_conv1d(input, weight, size):
+def conv1d(input, weight, size):
     if math.prod(weight.shape) == 0:
         return 0
     in_size = input.shape[-1:]
@@ -13,7 +12,7 @@ def opt_conv1d(input, weight, size):
     input = F.pad(input,padding,'circular')
     return F.interpolate(F.conv1d(input,weight.unsqueeze(1),groups=C), size=in_size, mode='linear')
 
-def opt_conv2d(input, weight, size):
+def conv2d(input, weight, size):
     if math.prod(weight.shape) == 0:
         return 0
     in_size = input.shape[-2:]
@@ -24,7 +23,7 @@ def opt_conv2d(input, weight, size):
     input = F.pad(input,padding,'circular')
     return F.interpolate(F.conv2d(input,weight.unsqueeze(1),groups=C), size=in_size, mode='bilinear')
 
-def opt_conv3d(input, weight, size):
+def conv3d(input, weight, size):
     if math.prod(weight.shape) == 0:
         return 0
     in_size = input.shape[-3:]

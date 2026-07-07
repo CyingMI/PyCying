@@ -18,25 +18,25 @@ class BaseSpectralConv(nn.Module):
         return self._get_conv_function()(input,weight)
 
 
-class OptSpectralConv1d(BaseSpectralConv):
+class SpectralConv1d(BaseSpectralConv):
     def __init__(self, in_channels, opt_size):
         super().__init__(in_channels, opt_size)
 
     def _get_conv_function(self):
-        return F.opt_spectral_conv1d
+        return F.spectral_conv1d
 
 
-class OptSpectralConv2d(BaseSpectralConv):
+class SpectralConv2d(BaseSpectralConv):
     def __init__(self, in_channels, opt_size):
         super().__init__(in_channels, opt_size)
 
     def _get_conv_function(self):
-        return F.opt_spectral_conv2d
+        return F.spectral_conv2d
 
 
-class OptSpectralConv3d(BaseSpectralConv):
+class SpectralConv3d(BaseSpectralConv):
     def __init__(self, in_channels, opt_size):
         super().__init__(in_channels, opt_size)
 
     def _get_conv_function(self):
-        return F.opt_spectral_conv3d
+        return F.spectral_conv3d

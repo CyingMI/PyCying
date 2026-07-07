@@ -3,7 +3,7 @@ import torch
 import torch.nn.functional as F
 
 
-def opt_spectral_conv1d(input, weight):
+def spectral_conv1d(input, weight):
     if math.prod(weight.shape) == 0:
         return 0
     _,Sw = weight.shape
@@ -13,7 +13,7 @@ def opt_spectral_conv1d(input, weight):
     return torch.fft.irfft(weight * output)
 
 
-def opt_spectral_conv2d(input, weight):
+def spectral_conv2d(input, weight):
     if math.prod(weight.shape) == 0:
         return 0
     _,Sw1,Sw2 = weight.shape
@@ -23,7 +23,7 @@ def opt_spectral_conv2d(input, weight):
     return torch.fft.irfft2(weight * output)
 
 
-def opt_spectral_conv3d(input, weight):
+def spectral_conv3d(input, weight):
     if math.prod(weight.shape) == 0:
         return 0
     _,Sw1,Sw2,Sw3 = weight.shape
