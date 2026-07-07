@@ -6,7 +6,7 @@ import torch.nn as nn
 from .. import functional as F
 
 
-class BaseOptConv(nn.Module):
+class BaseConv(nn.Module):
     def __init__(self, size, in_channels, kernel_size):
         super().__init__()
         self.size = size
@@ -25,7 +25,7 @@ class BaseOptConv(nn.Module):
         return self._get_conv_function()(input,self.opt_weight,self.size)
 
 
-class OptConv1d(BaseOptConv):
+class Conv1d(BaseConv):
     def __init__(self, size, in_channels, kernel_size):
         super().__init__(size, in_channels, kernel_size)
 
@@ -38,10 +38,10 @@ class OptConv1d(BaseOptConv):
             raise ValueError('The parameter "kernel_size" does not match the current dimension.')
     
     def _get_conv_function(self):
-        return F.opt_conv1d
+        return F.conv1d
 
 
-class OptConv2d(BaseOptConv):
+class Conv2d(BaseConv):
     def __init__(self, size, in_channels, kernel_size):
         super().__init__(size, in_channels, kernel_size)
 
@@ -54,10 +54,10 @@ class OptConv2d(BaseOptConv):
             raise ValueError('The parameter "kernel_size" does not match the current dimension.')
     
     def _get_conv_function(self):
-        return F.opt_conv2d
+        return F.conv2d
 
 
-class OptConv3d(BaseOptConv):
+class Conv3d(BaseConv):
     def __init__(self, size, in_channels, kernel_size):
         super().__init__(size, in_channels, kernel_size)
 
@@ -70,4 +70,4 @@ class OptConv3d(BaseOptConv):
             raise ValueError('The parameter "kernel_size" does not match the current dimension.')
     
     def _get_conv_function(self):
-        return F.opt_conv3d
+        return F.conv3d

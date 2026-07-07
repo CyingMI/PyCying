@@ -1,16 +1,19 @@
-from .opt_conv import OptConv1d, OptConv2d, OptConv3d
-from .opt_spectral_conv import OptSpectralConv1d, OptSpectralConv2d, OptSpectralConv3d
-from .opt_layer import OptLayer1d, OptLayer2d, OptLayer3d
-from .opt_model import OptModel1d, OptModel2d, OptModel3d
-from .kan import KANEncoder, KANDecoder, KAN
-from .opt_lang_layer import OptLangLayer
-from .opt_lang_model import OptLangModel
+from .conv import Conv1d, Conv2d, Conv3d
+from .spectral_conv import SpectralConv1d, SpectralConv2d, SpectralConv3d
+from .equivariant_spectral_conv import EquivariantSpectralConv3d
+from .operator_layer import OperatorLayer1d, OperatorLayer2d, OperatorLayer3d
+from .operator_model import OperatorModel1d, OperatorModel2d, OperatorModel3d
+from .lang_layer import LangLayer
+from .lang_model import LangModel
+from .atomic_layer import AtomicLayer
+from .atomic_model import AtomicModel
 
 __all__ = [
-    'OptConv1d', 'OptConv2d', 'OptConv3d', 
-    'OptSpectralConv1d', 'OptSpectralConv2d', 'OptSpectralConv3d',
-    'OptLayer1d', 'OptLayer2d', 'OptLayer3d',
-    'OptModel1d', 'OptModel2d', 'OptModel3d',
-    'KANEncoder', 'KANDecoder', 'KAN',
-    'OptLangLayer', 'OptLangModel'
+    'Conv1d', 'Conv2d', 'Conv3d',
+    'SpectralConv1d', 'SpectralConv2d', 'SpectralConv3d',
+    'EquivariantSpectralConv3d',
+    'OperatorLayer1d', 'OperatorLayer2d', 'OperatorLayer3d',
+    'OperatorModel1d', 'OperatorModel2d', 'OperatorModel3d',
+    'LangLayer', 'LangModel',
+    'AtomicLayer', 'AtomicModel'
 ]

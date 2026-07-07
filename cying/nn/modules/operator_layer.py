@@ -1,9 +1,9 @@
 import torch.nn as nn
-from .opt_conv import OptConv1d, OptConv2d, OptConv3d
-from .opt_spectral_conv import OptSpectralConv1d, OptSpectralConv2d, OptSpectralConv3d
+from .conv import Conv1d, Conv2d, Conv3d
+from .spectral_conv import SpectralConv1d, SpectralConv2d, SpectralConv3d
 
 
-class BaseOptLayer(nn.Module):
+class BaseOperatorLayer(nn.Module):
     def __init__(self, size, in_channels, out_channels, hidden_width, spe_opt_size, spa_opt_size):
         super().__init__()
         self.size = size
@@ -34,18 +34,18 @@ class BaseOptLayer(nn.Module):
         raise NotImplementedError
 
 
-class OptLayer1d(BaseOptLayer):
+class OperatorLayer1d(BaseOperatorLayer):
     def __init__(self, size, in_channels, out_channels, hidden_width, spe_opt_size, spa_opt_size):
         super().__init__(size, in_channels, out_channels, hidden_width, spe_opt_size, spa_opt_size)
 
     def _create_spectral_opts(self):
-        return OptSpectralConv1d(
+        return SpectralConv1d(
             in_channels=self.in_channels,
             opt_size=self.spe_opt_size
         )
     
     def _create_spatial_opts(self):
-        return OptConv1d(
+        return Conv1d(
             size=self.size,
             in_channels=self.in_channels,
             kernel_size=self.spa_opt_size
@@ -62,18 +62,18 @@ class OptLayer1d(BaseOptLayer):
         return nn.Conv1d(self.in_channels,self.out_channels,1)
 
 
-class OptLayer2d(BaseOptLayer):
+class OperatorLayer2d(BaseOperatorLayer):
     def __init__(self, size, in_channels, out_channels, hidden_width, spe_opt_size, spa_opt_size):
         super().__init__(size, in_channels, out_channels, hidden_width, spe_opt_size, spa_opt_size)
 
     def _create_spectral_opts(self):
-        return OptSpectralConv2d(
+        return SpectralConv2d(
             in_channels=self.in_channels,
             opt_size=self.spe_opt_size
         )
     
     def _create_spatial_opts(self):
-        return OptConv2d(
+        return Conv2d(
             size=self.size,
             in_channels=self.in_channels,
             kernel_size=self.spa_opt_size
@@ -90,18 +90,18 @@ class OptLayer2d(BaseOptLayer):
         return nn.Conv2d(self.in_channels,self.out_channels,1)
 
 
-class OptLayer3d(BaseOptLayer):
+class OperatorLayer3d(BaseOperatorLayer):
     def __init__(self, size, in_channels, out_channels, hidden_width, spe_opt_size, spa_opt_size):
         super().__init__(size, in_channels, out_channels, hidden_width, spe_opt_size, spa_opt_size)
 
     def _create_spectral_opts(self):
-        return OptSpectralConv3d(
+        return SpectralConv3d(
             in_channels=self.in_channels,
             opt_size=self.spe_opt_size
         )
     
     def _create_spatial_opts(self):
-        return OptConv3d(
+        return Conv3d(
             size=self.size,
             in_channels=self.in_channels,
             kernel_size=self.spa_opt_size

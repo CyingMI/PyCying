@@ -7,7 +7,7 @@ import torch
 import torch.nn as nn
 
 
-class OptLangLayer(nn.Module):
+class LangLayer(nn.Module):
     """Operator language layer.
 
     Args:

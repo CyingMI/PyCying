@@ -1,9 +1,7 @@
-from .opt_spectral_conv import *
-from .opt_conv import *
-from .opt_lang_spectral_conv import *
+from .spectral_conv import *
+from .conv import *
 
 __all__ = [
-    'opt_conv1d', 'opt_conv2d', 'opt_conv3d',
-    'opt_spectral_conv1d', 'opt_spectral_conv2d', 'opt_spectral_conv3d',
-    'opt_lang_spectral_conv',
+    'conv1d', 'conv2d', 'conv3d',
+    'spectral_conv1d', 'spectral_conv2d', 'spectral_conv3d'
 ]

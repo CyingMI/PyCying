@@ -1,7 +1,7 @@
 import torch.nn as nn
-from .opt_layer import OptLayer1d, OptLayer2d, OptLayer3d
+from .operator_layer import OperatorLayer1d, OperatorLayer2d, OperatorLayer3d
 
-class BaseModel(nn.Module):
+class BaseOperatorModel(nn.Module):
     def __init__(self, size, params):
         super().__init__()
         self.size = size
@@ -11,7 +11,7 @@ class BaseModel(nn.Module):
 
     def _create_opt_net(self):
         raise NotImplementedError
-    
+
     def _get_opt_weight(self):
         return [p for name, p in self.named_parameters() if 'opt_weight' in name]
 
@@ -19,31 +19,31 @@ class BaseModel(nn.Module):
         return self.opt_net(input)
 
 
-class OptModel1d(BaseModel):
+class OperatorModel1d(BaseOperatorModel):
     def __init__(self, size, params):
         super().__init__(size, params)
 
     def _create_opt_net(self):
         return nn.Sequential(
-            *[OptLayer1d(self.size,**param) for param in self.params]
+            *[OperatorLayer1d(self.size,**param) for param in self.params]
         )
 
 
-class OptModel2d(BaseModel):
+class OperatorModel2d(BaseOperatorModel):
     def __init__(self, size, params):
         super().__init__(size, params)
 
     def _create_opt_net(self):
         return nn.Sequential(
-            *[OptLayer2d(self.size,**param) for param in self.params]
+            *[OperatorLayer2d(self.size,**param) for param in self.params]
         )
 
 
-class OptModel3d(BaseModel):
+class OperatorModel3d(BaseOperatorModel):
     def __init__(self, size, params):
         super().__init__(size, params)
 
     def _create_opt_net(self):
         return nn.Sequential(
-            *[OptLayer3d(self.size,**param) for param in self.params]
+            *[OperatorLayer3d(self.size,**param) for param in self.params]
         )

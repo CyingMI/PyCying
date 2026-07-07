@@ -6,10 +6,10 @@ attention residuals to produce final logits over the vocabulary.
 """
 import torch
 import torch.nn as nn
-from .opt_lang_layer import OptLangLayer
+from .lang_layer import LangLayer
 
 
-class OptLangModel(nn.Module):
+class LangModel(nn.Module):
     """Operator language model.
 
     Args:
@@ -41,7 +41,7 @@ class OptLangModel(nn.Module):
 
         # Stack of OptLangLayer instances
         self.layers = nn.ModuleList(
-            [OptLangLayer(d_model, num_heads, hidden_width) for _ in range(num_layers)]
+            [LangLayer(d_model, num_heads, hidden_width) for _ in range(num_layers)]
         )
 
         # Query weights for attention residual connections
