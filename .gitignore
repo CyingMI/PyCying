@@ -1,10 +1,14 @@
 .vscode/
+__pycache__/
+
+OMat24/
 translation2019zh/
 FIVES/
 ILSVRC2012_img/
-llm/
-__pycache__/
+MatPES-R2SCAN-2025.2/
+
 models/
+
 PNO/
 VNO/
 ANO/

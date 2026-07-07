@@ -1,6 +1,5 @@
-import torch
 import torch.nn as nn
-from .atomic_layer import AtomicLayer
+from .atomic_layer import AtomicLayer3d
 
 
 class AtomicModel(nn.Module):
@@ -9,7 +8,7 @@ class AtomicModel(nn.Module):
         self.size = size
         self.params = params
         self.atomic_model = nn.Sequential(*[
-            AtomicLayer(self.size, **param) for param in self.params
+            AtomicLayer3d(self.size, **param) for param in self.params
         ])
 
     def forward(self, input):
