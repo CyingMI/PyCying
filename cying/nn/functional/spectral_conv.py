@@ -30,4 +30,4 @@ def spectral_conv3d(input, weight):
     output = torch.fft.rfftn(input,dim=(-3,-2,-1))
     _,_,S1,S2,S3 = output.shape
     weight = torch.fft.ifftshift(F.pad(torch.fft.fftshift(weight,dim=[-2,-3]),(0,S3-Sw3,(S2-Sw2-1)//2+1,S2-Sw2-((S2-Sw2-1)//2+1),(S1-Sw1-1)//2+1,S1-Sw1-((S1-Sw1-1)//2+1)),value=0),dim=[-2,-3])
-    return torch.fft.irfftn(weight * output,dim=(-3,-2,-1))
+    return torch.fft.irfftn(weight * output, dim=(-3,-2,-1))
