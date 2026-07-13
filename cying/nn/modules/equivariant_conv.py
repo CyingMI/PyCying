@@ -28,9 +28,6 @@ class EquivariantConv3d(nn.Module):
         else:
             raise ValueError('The parameter "kernel_size" does not match the current dimension.')
     
-    def _get_conv_function(self):
-        raise NotImplementedError
-    
     def forward(self, input):
         weight = self.opt_weight[self.key].permute(3, 0, 1, 2)
         return F.conv3d(input,weight,self.size)
