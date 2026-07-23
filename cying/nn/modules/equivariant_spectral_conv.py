@@ -6,46 +6,36 @@ import torch.nn.functional as Ft
 
 
 class EquivariantSpectralConv3d(nn.Module):
-    def __init__(self, in_channels, opt_size):
+    def __init__(self, C, L):
         super().__init__()
-        self.in_channels = in_channels
-        self.opt_size = opt_size
-        q1 = torch.fft.fftfreq(opt_size[0], d=1/opt_size[0])
-        q2 = torch.fft.fftfreq(opt_size[1], d=1/opt_size[1])
-        q3 = torch.fft.rfftfreq(opt_size[2], d=1/opt_size[2])
-        q1, q2, q3 = torch.meshgrid(q1, q2, q3, indexing='ij')
-        q_norm = (q1**2 + q2**2 + q3**2).int()
-        self.register_buffer('key', torch.searchsorted(q_norm.unique(), q_norm))
-        self.opt_weight = nn.Parameter(torch.randn(q_norm.unique().numel(), in_channels, 2), requires_grad=True)
+        self.C = C
+        self.L = L
+        q = torch.fft.fftfreq(L, d=1/L)
+        k = torch.fft.fftfreq(L, d=1/L)
+        q1, q2, q3 = torch.meshgrid(q, q, k, indexing='ij')
+        q_square = (q1**2 + q2**2 + q3**2).int()
+        self.register_buffer('key', torch.searchsorted(q_square.unique(), q_square))
+        self.opt_weight = nn.Parameter(torch.randn(q_square.unique().numel(), C, 2) / C**0.5, requires_grad=True)
 
     def forward(self, input):
         weight = torch.view_as_complex(self.opt_weight[self.key]).permute(3, 0, 1, 2)
         return F.spectral_conv3d(input, weight)
-    
+
 class EFNO3d(nn.Module):
-    def __init__(self, in_channels, out_channels, opt_size):
+    def __init__(self, C_in, C_out, L):
         super().__init__()
-        self.in_channels = in_channels
-        self.out_channels = out_channels
-        self.opt_size = opt_size
-        q1 = torch.fft.fftfreq(opt_size[0], d=1/opt_size[0])
-        q2 = torch.fft.fftfreq(opt_size[1], d=1/opt_size[1])
-        q3 = torch.fft.rfftfreq(opt_size[2], d=1/opt_size[2])
-        q1, q2, q3 = torch.meshgrid(q1, q2, q3, indexing='ij')
-        q_norm = (q1**2 + q2**2 + q3**2).int()
-        self.register_buffer('key', torch.searchsorted(q_norm.unique(), q_norm))
-        self.opt_weight = nn.Parameter(torch.randn(q_norm.unique().numel(), in_channels, out_channels, 2) / math.sqrt(in_channels), requires_grad=True)
+        q = torch.fft.fftfreq(L, d=1/L)
+        k1, k2, k3 = torch.meshgrid(q, q, q, indexing='ij')
+        self.register_buffer('k_square', k1**2 + k2**2 + k3**2)
+        k_square_set = self.k_square.int().unique()
+        self.register_buffer('key', torch.searchsorted(k_square_set, self.k_square.int()))
+        self.opt_weight = nn.Parameter(torch.randn(k_square_set.numel(), C_in, C_out, 2) / C_in**0.5, requires_grad=True)
 
     def forward(self, input):
-        weight = torch.view_as_complex(self.opt_weight[self.key]).permute(3, 4, 0, 1, 2)
+        weight = torch.view_as_complex(self.opt_weight[self.key]).permute(3, 4, 0, 1, 2) / (self.k_square + 1)
         return self.spectral_conv3d(input, weight)
     
     def spectral_conv3d(self, input, weight):
-        if math.prod(weight.shape) == 0:
-            return 0
-        _,_,Sw1,Sw2,Sw3 = weight.shape
-        output = torch.fft.rfftn(input,dim=(-3,-2,-1))
-        _,_,S1,S2,S3 = output.shape
-        weight = torch.fft.ifftshift(Ft.pad(torch.fft.fftshift(weight,dim=[-2,-3]),(0,S3-Sw3,(S2-Sw2-1)//2+1,S2-Sw2-((S2-Sw2-1)//2+1),(S1-Sw1-1)//2+1,S1-Sw1-((S1-Sw1-1)//2+1)),value=0),dim=[-2,-3])
+        output = torch.fft.fftn(input,dim=(-3,-2,-1))
         output_fre = torch.einsum('B C x y z, C O x y z -> B O x y z', output, weight)
-        return torch.fft.irfftn(output_fre, dim=(-3,-2,-1))
+        return output_fre.mean(dim=[-3,-2,-1]).real
