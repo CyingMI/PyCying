@@ -3,6 +3,13 @@ import torch.nn as nn
 from .atomic_layer import AtomicLayer
 from .equivariant_spectral_conv import EFNO3d
 
+class SIREN(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, x):
+        return torch.sin(x)
+
 class AtomicModel(nn.Module):
     def __init__(self, d_model, hid_width, num_layers, cutoff_r = 6):
         super().__init__()
@@ -37,15 +44,11 @@ class AtomicModel(nn.Module):
         rel_pos = torch.cat([rel_pos, torch.ones_like(rel_pos[...,:1])], dim=-1)
         srij = self.s5(rel_dis) * (rel_dis > 1e-2) * (env_num > 0)
 
-        rel_pos = rel_pos / (rel_dis + (rel_dis < 1e-2))[...,None]
-
-        mul_pos = torch.einsum('B N M d, B N O d -> B N M O', rel_pos, rel_pos)
-
         ene_emb = self.ato_emb(ato_num)
         env_emb = self.ato_emb(env_num)
 
         for layer in self.layers:
-            ene_emb, env_emb = layer(ene_emb,env_emb,mul_pos,srij)
+            ene_emb, env_emb = layer(ene_emb,env_emb,rel_pos,rel_dis,srij)
         
         return self.ene_lin(ene_emb)
     

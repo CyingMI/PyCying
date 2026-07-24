@@ -1,6 +1,13 @@
 import torch
 import torch.nn as nn
 
+class SIREN(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, x):
+        return torch.sin(x)
+
 class AtomicLayer(nn.Module):
     def __init__(self, d_model, hid_width):
         super().__init__()
@@ -23,6 +30,16 @@ class AtomicLayer(nn.Module):
             nn.Linear(hid_width, d_model)
         )
 
+        self.gr = nn.Sequential(
+            nn.Linear(1, 32),
+            SIREN(),
+            nn.Linear(32, 32),
+            SIREN(),
+            nn.Linear(32, 32),
+            SIREN(),
+            nn.Linear(32, 1)
+        )
+
         self.env_norm = nn.RMSNorm(d_model)
 
         self.envout_norm = nn.RMSNorm(d_model)
@@ -31,7 +48,10 @@ class AtomicLayer(nn.Module):
 
         self.eneout_norm = nn.RMSNorm(d_model)
 
-    def forward(self, ene_emb, env_emb, mul_pos, srij):
+    def forward(self, ene_emb, env_emb, rel_pos, rel_dis, srij):
+        rel_pos = rel_pos * self.gr(rel_dis[...,None])
+        mul_pos = torch.einsum('B N M d, B N O d -> B N M O', rel_pos, rel_pos)
+
         qk = self.qk_linear(torch.cat([ene_emb[...,None,:].expand(*env_emb.shape),env_emb], dim=-1))
         opt_weight = torch.view_as_complex(self.opt_weight)
         env_fre = torch.fft.rfft(qk)
