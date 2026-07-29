@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from vision_decoder_layer import VisionDecoderLayer
+from .vision_decoder_layer import VisionDecoderLayer
 
 class VisionDecoder(nn.Module):
     theta : torch.Tensor

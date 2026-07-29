@@ -18,7 +18,7 @@ class VisionDecoderLayer(nn.Module):
         self.q_linear = nn.Linear(d_model, d_model, bias=False)
         self.t_linear = nn.Linear(d_model, d_model, bias=False)
 
-        self.qk_weight = nn.Parameter(torch.stack(torch.zeros(num_heads, self.d_head // 2 + 1, 2), dim=-1))
+        self.qk_weight = nn.Parameter(torch.stack((torch.zeros(num_heads, self.d_head // 2 + 1),torch.zeros(num_heads, self.d_head // 2 +1)), dim=-1))
 
         self.att_linear = nn.Linear(d_model, d_model, bias=False)
 
@@ -43,18 +43,18 @@ class VisionDecoderLayer(nn.Module):
         padding_mask
     ):
 
-        quary_att = self.norm(self._multi_head_attention(
+        query_seq2 = self.norm(self._multi_head_attention(
             quary_seq,
             quary_seq,
             q_position_embeddings
         ) + quary_seq)
         
         quary_att = self.norm(self._multi_head_attention(
-            quary_seq,
+            query_seq2,
             target_seq,
             q_position_embeddings,
             padding_mask
-        ) + quary_seq)
+        ) + query_seq2)
 
         return self.norm(self.nonlinear(quary_att) + quary_att)
 
@@ -89,14 +89,14 @@ class VisionDecoderLayer(nn.Module):
         q_position_embeddings
     ):
         quary_len = quary_seq.size(1)
-        target_len = quary_seq.size(1)
+        target_len = target_seq.size(1)
 
         position_embeddings = torch.exp(
             1j * torch.arange(
                 0,
                 target_len,
                 device=quary_seq.device
-            )[..., None, None] / self.theta[None, None, :]
+            )[..., None, None] / self.theta[None,None,:]
         )
 
         quary_seq = self.q_linear(quary_seq).view(
@@ -105,6 +105,7 @@ class VisionDecoderLayer(nn.Module):
             self.num_heads,
             self.d_head
         )
+
 
         target_seq = self.t_linear(target_seq).view(
             -1,
