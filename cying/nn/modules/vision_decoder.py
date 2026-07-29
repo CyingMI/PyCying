@@ -52,30 +52,3 @@ class VisionDecoder(nn.Module):
             query_seq = layer(query_seq,target_seq,q_position_embedings,padding_mask)
             
         return query_seq
-
-
-def build_VisonDecoder(target_seq,
-                       padding_mask,
-                       d_model = 512,
-                       num_heads = 8,
-                       hidden_width = 2048,
-                       num_layers = 6,
-                       ):
-
-    
-    visiondecoder = VisionDecoder(d_model,num_heads,hidden_width,num_layers)
-
-    out = visiondecoder(target_seq,padding_mask)
-
-    return out
-
-
-##test
-target_seq = torch.randn(2,32*32,512)
-
-print(target_seq.size(1))
-
-out = build_VisonDecoder(target_seq = target_seq,padding_mask=None)
-
-print(out.shape)
-
