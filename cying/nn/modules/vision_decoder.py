@@ -3,7 +3,6 @@ import torch.nn as nn
 from .vision_decoder_layer import VisionDecoderLayer
 
 class VisionDecoder(nn.Module):
-    theta : torch.Tensor
     def __init__(
             self,
             d_model,
@@ -13,7 +12,10 @@ class VisionDecoder(nn.Module):
             num_query = 100
         ):
         super().__init__()
-        self.layers = nn.ModuleList([VisionDecoderLayer(d_model=d_model,num_heads=num_heads,hidden_width=hidden_width) 
+        self.layers = nn.ModuleList([VisionDecoderLayer(d_model,
+                                                        num_heads,
+                                                        hidden_width
+                                                        ) 
                                      for _ in range(num_layers)]
                                      )
 
@@ -21,34 +23,39 @@ class VisionDecoder(nn.Module):
         
         self.d_head = d_model // num_heads
 
-        self.register_buffer(
-                    "theta",
-                    10000 ** (2 * torch.arange(0, self.d_head // 2 + 1) / self.d_head),
-                )
-        
-    def q_position_embedings(self):
+        self.q_position_embeddings = torch.exp(1j * nn.Parameter(
+            torch.randn(num_query, self.d_head // 2 + 1) * 0.02
+        ).unsqueeze(1)
+        )
 
-        query_len = self.query_seq.size(0)
+    def t_position_embedings(self, target_seq):
+
+        target_len = target_seq.size(1)
         
         position = torch.exp(
                     1j * torch.arange(
                         0,
-                        query_len,
-                        device=self.query_seq.device
-                    )[..., None, None] / self.theta[None,None,:]
+                        target_len,
+                        device=target_seq.device
+                    )[..., None, None] / (10000 ** (2 * torch.arange(0, self.d_head // 2 + 1) / self.d_head)[None,None,:])
                 )
         
         return position
 
 
-    def forward(self,target_seq,padding_mask):
-
-        q_position_embedings = self.q_position_embedings()
+    def forward(self, target_seq, padding_mask):
 
         query_seq = self.query_seq.unsqueeze(0)
 
+        t_position_embedings = self.t_position_embedings(target_seq)
+
         for layer in self.layers:
 
-            query_seq = layer(query_seq,target_seq,q_position_embedings,padding_mask)
+            query_seq = layer(query_seq,
+                              target_seq,
+                              self.q_position_embeddings,
+                              t_position_embedings,
+                              padding_mask
+                              )
             
         return query_seq
