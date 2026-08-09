@@ -1,91 +1,85 @@
 import torch
 import torch.nn as nn
 
-class SIREN(nn.Module):
-    def __init__(self):
-        super().__init__()
-
-    def forward(self, x):
-        return torch.sin(x)
-
 class AtomicLayer(nn.Module):
-    def __init__(self, d_model, hid_width, opt_size, L=32):
+    def __init__(self, d_model, hid_width, N, cutoff_r=6):
         super().__init__()
         self.d_model = d_model
         self.hid_width = hid_width
-        self.opt_size = opt_size
-        self.L = L
+        self.N = N
+        self.cutoff_r = cutoff_r
 
-        self.ato_weight = nn.Parameter(torch.zeros(opt_size, d_model, d_model), requires_grad=True)
+        self.ato_weight = nn.Parameter(torch.zeros(N, d_model, d_model), requires_grad=True)
 
-        self.env_weight = nn.Parameter(torch.zeros(opt_size, d_model, d_model), requires_grad=True)
-
-        self.env_linear = nn.Linear(2*d_model, d_model, bias=False)
+        self.env_weight = nn.Parameter(torch.zeros(N, d_model, d_model), requires_grad=True)
 
         self.fnn_ato = nn.Sequential(
             nn.Linear(d_model, hid_width),
-            SIREN(),
+            nn.SiLU(),
             nn.Linear(hid_width, d_model)
         )
 
         self.fnn_env = nn.Sequential(
             nn.Linear(d_model, hid_width),
-            SIREN(),
+            nn.SiLU(),
             nn.Linear(hid_width, d_model)
         )
 
-        self.env_norm_in = nn.RMSNorm(d_model)
-        self.env_norm_out = nn.RMSNorm(d_model)
-        
+        self.fnn_cutoff = nn.Sequential(
+            nn.Linear(1, hid_width),
+            nn.SiLU(),
+            nn.Linear(hid_width, hid_width),
+            nn.SiLU(),
+            nn.Linear(hid_width, 1)
+        )
+
         self.ato_norm_in = nn.RMSNorm(d_model)
         self.ato_norm_out = nn.RMSNorm(d_model)
+        self.env_norm_in = nn.RMSNorm(d_model)
+        self.env_norm_out = nn.RMSNorm(d_model)
 
-
-    def forward(self, ato_emb, ato_env, expijk, expijk_count, srij):
-        ato_env = self.env_linear(torch.cat([ato_env,ato_emb[...,None,:].expand(*ato_env.shape)],dim=-1))
+    def forward(self, ato_emb, ato_env, rel_disij, J0ij, J0ijk, padding):
+        srij = self.s5(rel_disij) * (rel_disij > 1e-2) * padding
 
         env_field = torch.einsum(
             'B N M d, B N M s -> B N d s',
             ato_env * srij,
-            expijk
+            J0ij
+        ) + ato_emb[...,None]
+
+        env_probe = torch.einsum(
+            'B N M d, B N M O s -> B N O d s',
+            ato_env * srij,
+            J0ijk
+        ) + torch.einsum(
+            'B N d, B N M s -> B N M d s',
+            ato_emb,
+            J0ij
         )
-        
-        ato_emb = self.atom_probe(ato_emb, env_field)
 
-        env_field = torch.einsum(
-            'B N d s, B N M s -> B N M d s',
-            env_field / expijk_count,
-            expijk
-        )
+        env_probe = torch.einsum(
+            'B N M n s, B N M n, s n m -> B N M m',
+            env_probe,
+            ato_env,
+            self.env_weight
+        ) / self.N
 
-        ato_env = self.env_probe(ato_env, env_field)
+        ato_env = self.env_norm_in(env_probe + ato_env)
+        ato_env = self.env_norm_out(self.fnn_env(ato_env) + ato_env)
 
-        return ato_emb, ato_env
-
-    def atom_probe(self, ato_emb, env_field):
-        atom_probe = torch.einsum(
+        ato_probe = torch.einsum(
             'B N n s, B N n, s n m -> B N m',
             env_field,
             ato_emb,
             self.ato_weight
-        ) / self.L**3
-        
-        ato_emb = self.ato_norm_in(atom_probe + ato_emb)
-        
+        ) / self.N
+
+        ato_emb = self.ato_norm_in(ato_probe + ato_emb)
         ato_emb = self.ato_norm_out(self.fnn_ato(ato_emb) + ato_emb)
 
-        return ato_emb
+        return ato_emb, ato_env
 
-    def env_probe(self, ato_env, env_field):
-        env_probe = torch.einsum(
-            'B N M n s, B N M n, s n m -> B N M m',
-            env_field,
-            ato_env,
-            self.env_weight
-        ) / self.L**3
-        
-        ato_env = self.env_norm_in(env_probe + ato_env)
-
-        ato_env = self.env_norm_out(self.fnn_env(ato_env) + ato_env)
-
-        return ato_env
+    def s5(self, x):
+        x = x / self.cutoff_r
+        x = x * (x < 1)
+        return (1 - x**5*(56 - 140*x + 120*x**2 - 35*x**3)) * self.fnn_cutoff(x) * (x < 1)
