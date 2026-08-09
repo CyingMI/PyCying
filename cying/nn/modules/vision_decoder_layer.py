@@ -22,11 +22,6 @@ class VisionDecoderLayer(nn.Module):
 
         self.att_linear = nn.Linear(d_model, d_model, bias=False)
 
-        self.register_buffer(
-            "theta",
-            10000 ** (2 * torch.arange(0, self.d_head // 2 + 1) / self.d_head),
-        )
-
         self.nonlinear = nn.Sequential(
             nn.Linear(self.d_model, self.hidden_width),
             nn.GELU(),
@@ -40,21 +35,24 @@ class VisionDecoderLayer(nn.Module):
         quary_seq,
         target_seq,
         q_position_embeddings,
+        t_position_embeddings,
         padding_mask
     ):
 
-        query_seq2 = self.norm(self._multi_head_attention(
+        query_seq = self.norm(self._multi_head_attention(
             quary_seq,
             quary_seq,
+            q_position_embeddings,
             q_position_embeddings
         ) + quary_seq)
-        
+    
         quary_att = self.norm(self._multi_head_attention(
-            query_seq2,
+            query_seq,
             target_seq,
             q_position_embeddings,
+            t_position_embeddings,
             padding_mask
-        ) + query_seq2)
+        ) + query_seq)
 
         return self.norm(self.nonlinear(quary_att) + quary_att)
 
@@ -63,9 +61,10 @@ class VisionDecoderLayer(nn.Module):
         quary_seq,
         target_seq,
         q_position_embeddings,
+        t_position_embeddings,
         padding_mask=None
     ):
-        scores, values = self._get_score_value(quary_seq, target_seq, q_position_embeddings)
+        scores, values = self._get_score_value(quary_seq, target_seq, q_position_embeddings,t_position_embeddings)
 
         if padding_mask is not None:
             scores = scores.masked_fill(
@@ -86,18 +85,11 @@ class VisionDecoderLayer(nn.Module):
         self,
         quary_seq,
         target_seq,
-        q_position_embeddings
+        q_position_embeddings,
+        t_position_embeddings
     ):
         quary_len = quary_seq.size(1)
         target_len = target_seq.size(1)
-
-        position_embeddings = torch.exp(
-            1j * torch.arange(
-                0,
-                target_len,
-                device=quary_seq.device
-            )[..., None, None] / self.theta[None,None,:]
-        )
 
         quary_seq = self.q_linear(quary_seq).view(
             -1,
@@ -105,7 +97,6 @@ class VisionDecoderLayer(nn.Module):
             self.num_heads,
             self.d_head
         )
-
 
         target_seq = self.t_linear(target_seq).view(
             -1,
@@ -116,7 +107,7 @@ class VisionDecoderLayer(nn.Module):
 
         q_freq = torch.fft.rfft(quary_seq) * q_position_embeddings / self.d_head
 
-        k_freq = torch.fft.rfft(target_seq) * position_embeddings / self.d_head
+        k_freq = torch.fft.rfft(target_seq) * t_position_embeddings / self.d_head
 
         scores = torch.einsum(
             "b t n d, n d, b s n d -> n b t s",
