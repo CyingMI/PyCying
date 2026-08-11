@@ -7,7 +7,7 @@ class VisionDecoder(nn.Module):
         self,
         d_model,
         num_heads,
-        hidden_width,
+        hid_width,
         num_layers,
         target_len = 64,
         query_len = 100
@@ -15,7 +15,7 @@ class VisionDecoder(nn.Module):
         super().__init__()
         self.d_model = d_model
         self.num_heads = num_heads
-        self.hidden_width = hidden_width
+        self.hid_width = hid_width
         self.num_layers = num_layers
         self.target_len = target_len
         self.query_len = query_len
@@ -24,7 +24,7 @@ class VisionDecoder(nn.Module):
         self.layers = nn.ModuleList([
             VisionDecoderLayer(d_model,
                 num_heads,
-                hidden_width
+                hid_width
             ) for _ in range(num_layers)
         ])
 
