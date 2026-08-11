@@ -7,7 +7,7 @@ class VisionDecoderLayer(nn.Module):
         self,
         d_model,
         num_heads,
-        hidden_width,
+        hidden_width
     ):
         super().__init__()
         self.d_model = d_model
@@ -18,17 +18,19 @@ class VisionDecoderLayer(nn.Module):
         self.q_linear = nn.Linear(d_model, d_model, bias=False)
         self.t_linear = nn.Linear(d_model, d_model, bias=False)
 
-        self.qk_weight = nn.Parameter(torch.stack((torch.zeros(num_heads, self.d_head // 2 + 1),torch.zeros(num_heads, self.d_head // 2 +1)), dim=-1))
+        self.qk_weight = nn.Parameter(torch.zeros(num_heads, self.d_head // 2 + 1, 2), requires_grad=True)
 
         self.att_linear = nn.Linear(d_model, d_model, bias=False)
 
         self.nonlinear = nn.Sequential(
-            nn.Linear(self.d_model, self.hidden_width),
+            nn.Linear(d_model, hidden_width),
             nn.GELU(),
-            nn.Linear(self.hidden_width, self.d_model),
+            nn.Linear(hidden_width, d_model),
         )
 
-        self.norm = nn.RMSNorm(d_model, elementwise_affine=False)
+        self.self_att_norm = nn.RMSNorm(d_model)
+        self.cross_att_norm = nn.RMSNorm(d_model)
+        self.out_norm = nn.RMSNorm(d_model)
 
     def forward(
         self,
@@ -39,14 +41,14 @@ class VisionDecoderLayer(nn.Module):
         padding_mask
     ):
 
-        query_seq = self.norm(self._multi_head_attention(
+        query_seq = self.self_att_norm(self._multi_head_attention(
             quary_seq,
             quary_seq,
             q_position_embeddings,
             q_position_embeddings
         ) + quary_seq)
     
-        quary_att = self.norm(self._multi_head_attention(
+        quary_att = self.cross_att_norm(self._multi_head_attention(
             query_seq,
             target_seq,
             q_position_embeddings,
@@ -54,7 +56,7 @@ class VisionDecoderLayer(nn.Module):
             padding_mask
         ) + query_seq)
 
-        return self.norm(self.nonlinear(quary_att) + quary_att)
+        return self.out_norm(self.nonlinear(quary_att) + quary_att)
 
     def _multi_head_attention(
         self,
@@ -66,16 +68,14 @@ class VisionDecoderLayer(nn.Module):
     ):
         scores, values = self._get_score_value(quary_seq, target_seq, q_position_embeddings,t_position_embeddings)
 
-        if padding_mask is not None:
-            scores = scores.masked_fill(
-                mask=padding_mask,
-                value=-float("inf"),
-            )
+        scores = scores.masked_fill(
+            mask=padding_mask,
+            value=-float("inf"),
+        ) if padding_mask is not None else scores
 
-        attention = torch.softmax(scores, dim=-1)
         out = torch.einsum(
             "n b t s, b s n d -> b t n d",
-            attention,
+            scores.softmax(dim=-1),
             values
         )
 
@@ -88,19 +88,14 @@ class VisionDecoderLayer(nn.Module):
         q_position_embeddings,
         t_position_embeddings
     ):
-        quary_len = quary_seq.size(1)
-        target_len = target_seq.size(1)
-
         quary_seq = self.q_linear(quary_seq).view(
-            -1,
-            quary_len,
+            *quary_seq.shape[:2],
             self.num_heads,
             self.d_head
         )
 
         target_seq = self.t_linear(target_seq).view(
-            -1,
-            target_len,
+            *target_seq.shape[:2],
             self.num_heads,
             self.d_head
         )
