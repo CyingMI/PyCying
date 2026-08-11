@@ -1,4 +1,5 @@
 import torch.nn as nn
+import torch.nn.functional as F
 from .conv import Conv1d, Conv2d, Conv3d
 from .spectral_conv import SpectralConv1d, SpectralConv2d, SpectralConv3d
 
@@ -18,8 +19,12 @@ class BaseOperatorLayer(nn.Module):
         self.linear_skip = self._create_linear_skip()
 
     def forward(self, input):
+        input = self._interpolate(input)
         lin_opts = self.spectral_opts(input) + self.spatial_opts(input) + input
         return self.nonlinear_opts(lin_opts) + self.linear_skip(lin_opts)
+
+    def _interpolate(self, input):
+        raise NotImplementedError
 
     def _create_spectral_opts(self):
         raise NotImplementedError
@@ -38,6 +43,9 @@ class OperatorLayer1d(BaseOperatorLayer):
     def __init__(self, size, in_channels, out_channels, hidden_width, spe_opt_size, spa_opt_size):
         super().__init__(size, in_channels, out_channels, hidden_width, spe_opt_size, spa_opt_size)
 
+    def _interpolate(self, input):
+        return F.interpolate(input, size=self.size, mode='linear')
+
     def _create_spectral_opts(self):
         return SpectralConv1d(
             in_channels=self.in_channels,
@@ -46,7 +54,6 @@ class OperatorLayer1d(BaseOperatorLayer):
     
     def _create_spatial_opts(self):
         return Conv1d(
-            size=self.size,
             in_channels=self.in_channels,
             kernel_size=self.spa_opt_size
         )
@@ -66,6 +73,9 @@ class OperatorLayer2d(BaseOperatorLayer):
     def __init__(self, size, in_channels, out_channels, hidden_width, spe_opt_size, spa_opt_size):
         super().__init__(size, in_channels, out_channels, hidden_width, spe_opt_size, spa_opt_size)
 
+    def _interpolate(self, input):
+        return F.interpolate(input, size=self.size, mode='bilinear')
+
     def _create_spectral_opts(self):
         return SpectralConv2d(
             in_channels=self.in_channels,
@@ -74,7 +84,6 @@ class OperatorLayer2d(BaseOperatorLayer):
     
     def _create_spatial_opts(self):
         return Conv2d(
-            size=self.size,
             in_channels=self.in_channels,
             kernel_size=self.spa_opt_size
         )
@@ -94,6 +103,9 @@ class OperatorLayer3d(BaseOperatorLayer):
     def __init__(self, size, in_channels, out_channels, hidden_width, spe_opt_size, spa_opt_size):
         super().__init__(size, in_channels, out_channels, hidden_width, spe_opt_size, spa_opt_size)
 
+    def _interpolate(self, input):
+        return F.interpolate(input, size=self.size, mode='trilinear')
+
     def _create_spectral_opts(self):
         return SpectralConv3d(
             in_channels=self.in_channels,
@@ -102,7 +114,6 @@ class OperatorLayer3d(BaseOperatorLayer):
     
     def _create_spatial_opts(self):
         return Conv3d(
-            size=self.size,
             in_channels=self.in_channels,
             kernel_size=self.spa_opt_size
         )

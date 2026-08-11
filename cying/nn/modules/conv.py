@@ -7,9 +7,8 @@ from .. import functional as F
 
 
 class BaseConv(nn.Module):
-    def __init__(self, size, in_channels, kernel_size):
+    def __init__(self, in_channels, kernel_size):
         super().__init__()
-        self.size = size
         self.in_channels = in_channels
         self.kernel_size = self._modify_kernel_size(kernel_size)
         self.padding = tuple((s-1)//2 for s in self.kernel_size for _ in range(2))
@@ -22,17 +21,17 @@ class BaseConv(nn.Module):
         raise NotImplementedError
     
     def forward(self, input):
-        return self._get_conv_function()(input,self.opt_weight,self.size)
+        return self._get_conv_function()(input, self.opt_weight)
 
 
 class Conv1d(BaseConv):
-    def __init__(self, size, in_channels, kernel_size):
-        super().__init__(size, in_channels, kernel_size)
+    def __init__(self, in_channels, kernel_size):
+        super().__init__(in_channels, kernel_size)
 
     def _modify_kernel_size(self, size):
         if isinstance(size, int):
             return (size,)
-        elif isinstance(size, tuple) and len(size==1):
+        elif isinstance(size, tuple) and len(size)==1:
             return size
         else:
             raise ValueError('The parameter "kernel_size" does not match the current dimension.')
@@ -42,13 +41,13 @@ class Conv1d(BaseConv):
 
 
 class Conv2d(BaseConv):
-    def __init__(self, size, in_channels, kernel_size):
-        super().__init__(size, in_channels, kernel_size)
+    def __init__(self, in_channels, kernel_size):
+        super().__init__(in_channels, kernel_size)
 
     def _modify_kernel_size(self, size):
         if isinstance(size, int):
             return (size,)*2
-        elif isinstance(size, tuple) and len(size==2):
+        elif isinstance(size, tuple) and len(size)==2:
             return size
         else:
             raise ValueError('The parameter "kernel_size" does not match the current dimension.')
@@ -58,13 +57,13 @@ class Conv2d(BaseConv):
 
 
 class Conv3d(BaseConv):
-    def __init__(self, size, in_channels, kernel_size):
-        super().__init__(size, in_channels, kernel_size)
+    def __init__(self, in_channels, kernel_size):
+        super().__init__(in_channels, kernel_size)
 
     def _modify_kernel_size(self, size):
         if isinstance(size, int):
             return (size,)*3
-        elif isinstance(size, tuple) and len(size==3):
+        elif isinstance(size, tuple) and len(size)==3:
             return size
         else:
             raise ValueError('The parameter "kernel_size" does not match the current dimension.')

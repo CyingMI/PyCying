@@ -2,10 +2,11 @@ import torch
 import torch.nn as nn
 
 class AtomicLayer(nn.Module):
-    def __init__(self, d_model, hid_width, N, cutoff_r=6):
+    def __init__(self, d_model, hid_width, L, N, cutoff_r=6):
         super().__init__()
         self.d_model = d_model
         self.hid_width = hid_width
+        self.L = L
         self.N = N
         self.cutoff_r = cutoff_r
 
@@ -30,22 +31,23 @@ class AtomicLayer(nn.Module):
             nn.SiLU(),
             nn.Linear(hid_width, hid_width),
             nn.SiLU(),
-            nn.Linear(hid_width, 1)
+            nn.Linear(hid_width, d_model)
         )
 
         self.ato_norm_in = nn.RMSNorm(d_model)
         self.ato_norm_out = nn.RMSNorm(d_model)
+        
         self.env_norm_in = nn.RMSNorm(d_model)
         self.env_norm_out = nn.RMSNorm(d_model)
 
-    def forward(self, ato_emb, ato_env, rel_disij, J0ij, J0ijk, padding):
-        srij = self.s5(rel_disij) * (rel_disij > 1e-2) * padding
+    def forward(self, ato_emb, ato_env, rel_disij, J0ij, J0ijk, padding, w):
+        srij = self.s5(rel_disij[...,None]) * (rel_disij[...,None] > 1e-2) * padding
 
         env_field = torch.einsum(
             'B N M d, B N M s -> B N d s',
             ato_env * srij,
             J0ij
-        ) + ato_emb[...,None]
+        )
 
         env_probe = torch.einsum(
             'B N M d, B N M O s -> B N O d s',
@@ -59,20 +61,20 @@ class AtomicLayer(nn.Module):
 
         env_probe = torch.einsum(
             'B N M n s, B N M n, s n m -> B N M m',
-            env_probe,
+            env_probe * w,
             ato_env,
             self.env_weight
-        ) / self.N
+        )
 
         ato_env = self.env_norm_in(env_probe + ato_env)
         ato_env = self.env_norm_out(self.fnn_env(ato_env) + ato_env)
 
         ato_probe = torch.einsum(
             'B N n s, B N n, s n m -> B N m',
-            env_field,
+            env_field * w,
             ato_emb,
             self.ato_weight
-        ) / self.N
+        )
 
         ato_emb = self.ato_norm_in(ato_probe + ato_emb)
         ato_emb = self.ato_norm_out(self.fnn_ato(ato_emb) + ato_emb)

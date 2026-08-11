@@ -8,14 +8,14 @@ class BaseSpectralConv(nn.Module):
         super().__init__()
         self.in_channels = in_channels
         self.opt_size = opt_size
-        self.opt_weight = nn.Parameter(torch.zeros(in_channels,*self.opt_size,2),requires_grad=True)
+        self.opt_weight = nn.Parameter(torch.zeros(in_channels, *self.opt_size, 2),requires_grad=True)
 
     def _get_conv_function(self):
         raise NotImplementedError
 
     def forward(self, input):
         weight = torch.view_as_complex(self.opt_weight)
-        return self._get_conv_function()(input,weight)
+        return self._get_conv_function()(input, weight)
 
 
 class SpectralConv1d(BaseSpectralConv):
