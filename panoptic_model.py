@@ -112,11 +112,6 @@ class OperatorPanopticModel(nn.Module):
         self.encoder = OperatorModel2d(encoder_params)
         self.encoder_norm = nn.GroupNorm(1, d_model)
 
-        self.pixel_projection = nn.Sequential(
-            nn.Conv2d(d_model, mask_dim, kernel_size=1),
-            nn.GroupNorm(1, mask_dim),
-        )
-
         self.decoder = VisionDecoder(
             d_model=d_model,
             num_heads=num_heads,
