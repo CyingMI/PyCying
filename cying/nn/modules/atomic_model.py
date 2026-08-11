@@ -1,4 +1,5 @@
 import torch
+import numpy as np
 import torch.nn as nn
 from .atomic_layer import AtomicLayer
 
@@ -11,12 +12,14 @@ class AtomicModel(nn.Module):
         self.cutoff_r = cutoff_r
         self.L = L
         self.N = N
-        self.register_buffer('k', torch.arange(0, L, L/N))
+        k, w = self.gauss_legendre_ab(N, 0, L)
+        self.register_buffer('k', k)
+        self.register_buffer('w', w)
 
         self.ato_emb = nn.Embedding(119, d_model, 0)
 
         self.layers = nn.ModuleList([
-            AtomicLayer(d_model, hid_width, N, cutoff_r) for _ in range(num_layers)
+            AtomicLayer(d_model, hid_width, L, N, cutoff_r) for _ in range(num_layers)
         ])
 
         self.lin_out = nn.Linear(d_model, 1)
@@ -47,11 +50,22 @@ class AtomicModel(nn.Module):
 
         padding = env_num[...,None] > 0
         
-        J0ij = torch.special.bessel_j0(torch.einsum('B N M, L -> B N M L', rel_disij, self.k))
+        J0ij = torch.special.bessel_j0(torch.einsum('B N M, L -> B N M L', rel_disij, self.k)) * (rel_disij[...,None] > 1e-2)
 
-        J0ijk = torch.special.bessel_j0(torch.einsum('B N M O, L -> B N M O L', rel_disijk, self.k))
+        J0ijk = torch.special.bessel_j0(torch.einsum('B N M O, L -> B N M O L', rel_disijk, self.k)) * (rel_disijk[...,None] > 1e-2)
         
         for layer in self.layers:
-            ato_emb, ato_env = layer(ato_emb, ato_env, rel_disij, J0ij, J0ijk, padding)
+            ato_emb, ato_env = layer(ato_emb, ato_env, rel_disij, J0ij, J0ijk, padding, self.w)
         
         return self.lin_out(ato_emb)
+
+    def gauss_legendre_ab(self, n, a, b):
+        x_np, w_np = np.polynomial.legendre.leggauss(n)
+        
+        x = torch.from_numpy(x_np).float()
+        w = torch.from_numpy(w_np).float()
+        
+        t = 0.5 * (b - a) * x + 0.5 * (a + b)
+        w = 0.5 * (b - a) * w
+        
+        return t, w
