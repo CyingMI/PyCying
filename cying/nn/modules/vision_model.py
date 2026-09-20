@@ -38,7 +38,8 @@ class VisionPredictionHeads(nn.Module):
         queries,
         pixel_features,
     ):
-        
+        box = self.box_head(queries)
+        box[...,2:] = box[...,2:] * (1 - box[...,:2])
         mask = torch.sigmoid(
             torch.einsum(
                 "b n d, b d h w -> b n h w", 
@@ -46,7 +47,6 @@ class VisionPredictionHeads(nn.Module):
                 pixel_features,
             )
         )
-        
         return self.class_head(queries), box, mask
 
 class VisionModel(nn.Module):
