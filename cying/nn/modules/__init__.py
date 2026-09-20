@@ -8,6 +8,7 @@ from .atomic_layer import AtomicLayer
 from .atomic_model import AtomicModel
 from .vision_decoder_layer import VisionDecoderLayer
 from .vision_decoder import VisionDecoder
+from .vision_model import VisionModel
 
 __all__ = [
     'Conv1d', 'Conv2d', 'Conv3d',
@@ -16,5 +17,6 @@ __all__ = [
     'OperatorModel1d', 'OperatorModel2d', 'OperatorModel3d',
     'LangLayer', 'LangModel',
     'AtomicLayer', 'AtomicModel',
-    'VisionDecoderLayer', 'VisionDecoder'
+    'VisionDecoderLayer', 'VisionDecoder',
+    'VisionModel'
 ]

@@ -1,3 +1,4 @@
+import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -19,7 +20,7 @@ class VisionPredictionHeads(nn.Module):
         self.num_classes = num_classes
         self.hid_width = hid_width
 
-        self.class_head = nn.Linear(d_model, num_classes +1)
+        self.class_head = nn.Linear(d_model, num_classes+1)
         self.box_head = nn.Sequential(
             nn.Linear(d_model, hid_width),
             nn.SiLU(),
@@ -37,72 +38,57 @@ class VisionPredictionHeads(nn.Module):
         queries,
         pixel_features,
     ):
-        return {
-            "pred_logits": self.class_head(queries),
-            "pred_boxes": self.box_head(queries),
-            "pred_masks": torch.sigmoid(
-                torch.einsum(
-                    "b n d, b d h w -> b n h w", 
-                    self.mask_head(queries), 
-                    pixel_features,
-                )
+        
+        mask = torch.sigmoid(
+            torch.einsum(
+                "b n d, b d h w -> b n h w", 
+                self.mask_head(queries), 
+                pixel_features,
             )
-        }
+        )
+        
+        return self.class_head(queries), box, mask
 
 class VisionModel(nn.Module):
     def __init__(
         self,
+        backbone_params,
+        encoder_params,
         num_classes,
-        d_model,
         num_heads,
         decoder_hidden_width,
         decoder_layers,
-        num_query,
-        mask_dim,
-        token_grid_size,
-        backbone_stride,
-        mask_stride,
-        backbone_params,
-        encoder_params
+        num_query
     ):
         super().__init__()
-
-        self.d_model = d_model
+        self.backbone_params = backbone_params
+        self.encoder_params = encoder_params
+        self.num_classes = num_classes
+        self.num_heads = num_heads
+        self.decoder_hidden_width = decoder_hidden_width
+        self.decoder_layers = decoder_layers
         self.num_query = num_query
-        self.token_grid_size = tuple(token_grid_size)
-        self.backbone_stride = backbone_stride
-        self.mask_stride = mask_stride
-        self.config = {
-            "num_classes": num_classes,
-            "d_model": d_model,
-            "num_heads": num_heads,
-            "decoder_hidden_width": decoder_hidden_width,
-            "decoder_layers": decoder_layers,
-            "num_query": num_query,
-            "mask_dim": mask_dim,
-            "token_grid_size": tuple(token_grid_size),
-            "backbone_stride": backbone_stride,
-            "mask_stride": mask_stride,
-            "backbone_params": backbone_params,
-            "encoder_params": encoder_params,
-        }
+
+        self.d_model = encoder_params[-1]['out_channels']
+        self.d_mask = backbone_params[-1]['out_channels']
+        self.target_len = math.prod(encoder_params[-1]['size'])
+        self.token_grid_size = encoder_params[-1]['size']
+
         self.backbone = OperatorModel2d(backbone_params)
-        self.backbone_norm = nn.GroupNorm(1, d_model)
 
         self.encoder = OperatorModel2d(encoder_params)
-        self.encoder_norm = nn.GroupNorm(1, d_model)
 
         self.decoder = VisionDecoder(
-            d_model=d_model,
+            d_model=self.d_model,
             num_heads=num_heads,
             hid_width=decoder_hidden_width,
             num_layers=decoder_layers,
-            num_query=num_query,
+            query_len=num_query
         )
 
         self.prediction_heads = VisionPredictionHeads(
-            d_model=d_model,
-            d_mask=mask_dim,
+            d_model=self.d_model,
+            d_mask=self.d_mask,
             num_classes=num_classes,
             hid_width=decoder_hidden_width
         )
@@ -114,7 +100,7 @@ class VisionModel(nn.Module):
     ):
         pixel_features = self.backbone(images)
 
-        target_seq = self.encoder_norm(self.encoder(pixel_features)).flatten(-2,-1).permute(0,2,1)
+        target_seq = self.encoder(pixel_features).flatten(-2,-1).permute(0,2,1)
 
         token_padding_mask = F.adaptive_max_pool2d(
             image_padding_mask.float()[:,None,...],
@@ -123,5 +109,8 @@ class VisionModel(nn.Module):
 
         queries = self.decoder(target_seq, token_padding_mask)
 
-        return self.prediction_heads(queries, self.backbone_norm(pixel_features))
+        return self.prediction_heads(queries, pixel_features)
+
+    def get_opt_weight(self):
+        return self.backbone.get_opt_weight() + self.encoder.get_opt_weight()
 
