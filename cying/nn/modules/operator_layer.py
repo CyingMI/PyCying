@@ -1,3 +1,4 @@
+import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from .conv import Conv1d, Conv2d, Conv3d
@@ -15,13 +16,22 @@ class BaseOperatorLayer(nn.Module):
         self.spa_opt_size = spa_opt_size
         self.spectral_opts = self._create_spectral_opts()
         self.spatial_opts = self._create_spatial_opts()
-        self.nonlinear_opts = self._create_nonlinear_opts()
-        self.linear_skip = self._create_linear_skip()
+        self.nonlinear_opts = nn.Sequential(
+            nn.Linear(self.in_channels, self.hidden_width),
+            nn.GELU(),
+            nn.Linear(self.hidden_width, self.out_channels)
+        )
+        self.linear_skip = nn.Linear(self.in_channels, self.out_channels)
+        self.in_norm = nn.RMSNorm(in_channels)
+        self.out_norm = nn.RMSNorm(out_channels)
 
     def forward(self, input):
         input = self._interpolate(input)
         lin_opts = self.spectral_opts(input) + self.spatial_opts(input) + input
-        return self.nonlinear_opts(lin_opts) + self.linear_skip(lin_opts)
+        normed_lin_opts = self.in_norm(torch.movedim(lin_opts, 1, -1))
+        output = self.nonlinear_opts(normed_lin_opts) + self.linear_skip(normed_lin_opts)
+        normed_output = torch.movedim(self.out_norm(output), -1, 1)
+        return normed_output
 
     def _interpolate(self, input):
         raise NotImplementedError
@@ -30,12 +40,6 @@ class BaseOperatorLayer(nn.Module):
         raise NotImplementedError
 
     def _create_spatial_opts(self):
-        raise NotImplementedError
-
-    def _create_nonlinear_opts(self):
-        raise NotImplementedError
-    
-    def _create_linear_skip(self):
         raise NotImplementedError
 
 
@@ -57,16 +61,6 @@ class OperatorLayer1d(BaseOperatorLayer):
             in_channels=self.in_channels,
             kernel_size=self.spa_opt_size
         )
-    
-    def _create_nonlinear_opts(self):
-        return nn.Sequential(
-            nn.Conv1d(self.in_channels,self.hidden_width,1),
-            nn.GELU(),
-            nn.Conv1d(self.hidden_width,self.out_channels,1)
-        )
-    
-    def _create_linear_skip(self):
-        return nn.Conv1d(self.in_channels,self.out_channels,1)
 
 
 class OperatorLayer2d(BaseOperatorLayer):
@@ -87,16 +81,6 @@ class OperatorLayer2d(BaseOperatorLayer):
             in_channels=self.in_channels,
             kernel_size=self.spa_opt_size
         )
-    
-    def _create_nonlinear_opts(self):
-        return nn.Sequential(
-            nn.Conv2d(self.in_channels,self.hidden_width,1),
-            nn.GELU(),
-            nn.Conv2d(self.hidden_width,self.out_channels,1)
-        )
-    
-    def _create_linear_skip(self):
-        return nn.Conv2d(self.in_channels,self.out_channels,1)
 
 
 class OperatorLayer3d(BaseOperatorLayer):
@@ -117,13 +101,3 @@ class OperatorLayer3d(BaseOperatorLayer):
             in_channels=self.in_channels,
             kernel_size=self.spa_opt_size
         )
-    
-    def _create_nonlinear_opts(self):
-        return nn.Sequential(
-            nn.Conv3d(self.in_channels,self.hidden_width,1),
-            nn.GELU(),
-            nn.Conv3d(self.hidden_width,self.out_channels,1)
-        )
-    
-    def _create_linear_skip(self):
-        return nn.Conv3d(self.in_channels,self.out_channels,1)

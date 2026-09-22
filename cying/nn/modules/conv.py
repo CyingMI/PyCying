@@ -13,6 +13,7 @@ class BaseConv(nn.Module):
         self.kernel_size = self._modify_kernel_size(kernel_size)
         self.padding = tuple((s-1)//2 for s in self.kernel_size for _ in range(2))
         self.opt_weight = nn.Parameter(torch.zeros([in_channels,*self.kernel_size]),requires_grad=True)
+        self.mask_weight = nn.Parameter(torch.zeros([in_channels,*self.kernel_size]),requires_grad=True)
 
     def _modify_kernel_size(self, size):
         raise NotImplementedError
@@ -20,8 +21,13 @@ class BaseConv(nn.Module):
     def _get_conv_function(self):
         raise NotImplementedError
     
-    def forward(self, input):
-        return self._get_conv_function()(input, self.opt_weight)
+    def forward(self, input, mode='train'):
+        if mode == 'valid':
+            mask = torch.sigmoid(self.mask_weight)
+        else:
+            mask = torch.sigmoid(self.mask_weight).detach()
+        weight = self.opt_weight * mask
+        return self._get_conv_function()(input, weight)
 
 
 class Conv1d(BaseConv):

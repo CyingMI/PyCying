@@ -30,18 +30,18 @@ class VisionDecoder(nn.Module):
 
         self.query_seq = nn.Parameter(torch.randn(query_len, d_model), requires_grad=True)
 
-        self.q_position_embeddings = nn.Parameter(torch.randn(query_len, 1, self.d_head // 2 + 1), requires_grad=True)
+        self.q_position_embeddings = nn.Parameter(torch.randn(query_len, d_model), requires_grad=True)
 
         self.register_buffer(
             't_position_embeddings',
-            torch.arange(0, target_len)[:,None,None] / (10000 ** (2 * torch.arange(0, self.d_head // 2 + 1) / self.d_head)[None,None,:])
+            torch.arange(0, target_len)[:,None] / (10000 ** (2 * torch.arange(0, d_model) / d_model)[None,:])
         )
 
     def forward(self, target_seq, padding_mask):
         q_position_embeddings = torch.exp(1j * self.q_position_embeddings)
         t_position_embeddings = torch.exp(1j * self.t_position_embeddings)
 
-        query_seq = self.query_seq.expand(*target_seq.shape)
+        query_seq = self.query_seq.expand(target_seq.size(0),-1,-1)
 
         for layer in self.layers:
             query_seq = layer(
