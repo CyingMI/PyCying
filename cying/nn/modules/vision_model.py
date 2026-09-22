@@ -5,6 +5,12 @@ import torch.nn.functional as F
 from .operator_model import OperatorModel2d
 from .vision_decoder import VisionDecoder
 
+class SIREN(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, x):
+        return torch.sin(x)
 
 class VisionPredictionHeads(nn.Module):
     def __init__(
@@ -39,12 +45,12 @@ class VisionPredictionHeads(nn.Module):
         pixel_features,
     ):
         box = self.box_head(queries)
-        box[...,2:] = box[...,2:] * (1 - box[...,:2])
+        box = torch.cat([box[...,:2],box[...,2:] * (1 - box[...,:2])], dim=-1)
         mask = torch.sigmoid(
             torch.einsum(
-                "b n d, b d h w -> b n h w", 
-                self.mask_head(queries), 
-                pixel_features,
+                "b n d, b d h w -> b n h w",
+                self.mask_head(queries),
+                pixel_features
             )
         )
         return self.class_head(queries), box, mask
@@ -83,6 +89,7 @@ class VisionModel(nn.Module):
             num_heads=num_heads,
             hid_width=decoder_hidden_width,
             num_layers=decoder_layers,
+            target_len=self.target_len,
             query_len=num_query
         )
 
@@ -97,10 +104,11 @@ class VisionModel(nn.Module):
         self,
         images,
         image_padding_mask = None,
+        mode = 'train'
     ):
-        pixel_features = self.backbone(images)
+        pixel_features = self.backbone(images, mode)
 
-        target_seq = self.encoder(pixel_features).flatten(-2,-1).permute(0,2,1)
+        target_seq = self.encoder(pixel_features, mode).flatten(-2,-1).permute(0,2,1)
 
         token_padding_mask = F.adaptive_max_pool2d(
             image_padding_mask.float()[:,None,...],
@@ -111,6 +119,5 @@ class VisionModel(nn.Module):
 
         return self.prediction_heads(queries, pixel_features)
 
-    def get_opt_weight(self):
-        return self.backbone.get_opt_weight() + self.encoder.get_opt_weight()
-
+    def get_mask_weight(self):
+        return self.backbone.get_mask_weight() + self.encoder.get_mask_weight()

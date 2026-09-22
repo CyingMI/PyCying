@@ -23,9 +23,11 @@ class TensorAttention(nn.Module):
             nn.Linear(d_model, d_model),
             SIREN()
         )
-        self.merge_weight = nn.Parameter(torch.randn(d_model, self.d_head) / self.d_model**0.5, requires_grad=True)
+        self.merge_weight = nn.Parameter(torch.randn(d_model, num_heads) / self.d_model**0.5, requires_grad=True)
 
         self.v_linear = nn.Linear(d_model, d_model, bias=False)
+
+        self.att_linear = nn.Linear(d_model, d_model, bias=False)
 
         self.norm = nn.RMSNorm(d_model)
 
@@ -43,7 +45,6 @@ class TensorAttention(nn.Module):
             mask=padding_mask[:,None,:,None],
             value=-float("inf"),
         ) if padding_mask is not None else scores
-
         out = torch.einsum(
             "b t s n, b s n d -> b t n d",
             scores.softmax(dim=-2),
@@ -65,7 +66,7 @@ class TensorAttention(nn.Module):
             'b t d, b s d, d h -> b t s h',
             q_basis,
             t_basis,
-            self.merge_weight
+            self.merge_weight + 1j*0
         ).real
 
         values = self.v_linear(target_seq).view(
@@ -123,5 +124,3 @@ class VisionDecoderLayer(nn.Module):
         )
 
         return self.out_norm(self.nonlinear(quary_att) + quary_att)
-
-    

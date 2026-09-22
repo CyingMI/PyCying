@@ -66,8 +66,6 @@ class HungarianMatcher(nn.Module):
 
         return assignment
 
-
-
 class SetCriterion(nn.Module):
     def __init__(self, num_classes, matcher, weight_dict, eos_coef=0.1):
         super().__init__()

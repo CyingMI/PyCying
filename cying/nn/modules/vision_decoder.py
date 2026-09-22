@@ -41,7 +41,7 @@ class VisionDecoder(nn.Module):
         q_position_embeddings = torch.exp(1j * self.q_position_embeddings)
         t_position_embeddings = torch.exp(1j * self.t_position_embeddings)
 
-        query_seq = self.query_seq.expand(*target_seq.shape)
+        query_seq = self.query_seq.expand(target_seq.size(0),-1,-1)
 
         for layer in self.layers:
             query_seq = layer(

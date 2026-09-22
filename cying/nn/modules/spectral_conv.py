@@ -9,12 +9,17 @@ class BaseSpectralConv(nn.Module):
         self.in_channels = in_channels
         self.opt_size = opt_size
         self.opt_weight = nn.Parameter(torch.zeros(in_channels, *self.opt_size, 2),requires_grad=True)
+        self.mask_weight = nn.Parameter(torch.zeros(in_channels, *self.opt_size),requires_grad=True)
 
     def _get_conv_function(self):
         raise NotImplementedError
 
-    def forward(self, input):
-        weight = torch.view_as_complex(self.opt_weight)
+    def forward(self, input, mode = 'train'):
+        if mode == 'valid':
+            mask = torch.sigmoid(self.mask_weight)
+        else:
+            mask = torch.sigmoid(self.mask_weight).detach()
+        weight = torch.view_as_complex(self.opt_weight) * mask
         return self._get_conv_function()(input, weight)
 
 
