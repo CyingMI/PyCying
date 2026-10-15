@@ -51,7 +51,7 @@ class LangLayer(nn.Module):
             "theta",
             10000 ** (2 * torch.arange(0, d_model) / d_model),
         )
-        self.s_linear = nn.Linear(d_model, self.d_head, bias=False)
+        self.s_linear = nn.Linear(d_model, num_heads, bias=False)
 
         self.nonlinear = nn.Sequential(
             nn.Linear(self.d_model, self.hidden_width),
@@ -103,19 +103,19 @@ class LangLayer(nn.Module):
                 mask=padding_mask.view((batch_size, 1, seq_len, 1)),
                 value=-float("inf"),
             )
-
+        
         if causal_mask is not None:
             scores = scores.masked_fill(
-                mask=causal_mask,
+                mask=causal_mask[...,None],
                 value=-float("inf"),
             )
-        
+
         out = torch.einsum(
             "b t s n, b s d n -> b t d n",
             scores.softmax(dim=-2),
             values
         ).flatten(-2,-1)
-
+        
         return self.att_linear(out)
 
     def _get_score_value(
