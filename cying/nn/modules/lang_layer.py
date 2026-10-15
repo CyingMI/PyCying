@@ -32,6 +32,7 @@ class LangLayer(nn.Module):
         self.d_model = d_model
         self.num_heads = num_heads
         self.hidden_width = hidden_width
+        self.d_head = d_model // num_heads
 
         self.q_tensor = nn.Sequential(
             nn.Linear(d_model, d_model),
@@ -50,7 +51,7 @@ class LangLayer(nn.Module):
             "theta",
             10000 ** (2 * torch.arange(0, d_model) / d_model),
         )
-        self.s_linear = nn.Linear(d_model, d_model, bias=False)
+        self.s_linear = nn.Linear(d_model, self.d_head, bias=False)
 
         self.nonlinear = nn.Sequential(
             nn.Linear(self.d_model, self.hidden_width),
@@ -110,10 +111,10 @@ class LangLayer(nn.Module):
             )
         
         out = torch.einsum(
-            "b t s d, b s d -> b t d",
+            "b t s n, b s d n -> b t d n",
             scores.softmax(dim=-2),
             values
-        )
+        ).flatten(-2,-1)
 
         return self.att_linear(out)
 
@@ -141,4 +142,6 @@ class LangLayer(nn.Module):
 
         scores = self.s_linear(scores)
 
-        return scores, self.v_linear(token_seq)
+        values = self.v_linear(token_seq).view(*token_seq.shape[:-1], self.d_head, self.num_heads)
+
+        return scores, values
