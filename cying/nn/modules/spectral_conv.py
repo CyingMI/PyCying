@@ -1,6 +1,5 @@
 import torch
 import torch.nn as nn
-# import numpy as np
 from .. import functional as F
 import torch
 import torch.nn as nn
@@ -100,7 +99,6 @@ class BSpline1D(nn.Module):
             *shape,
             self.N
         )
-
 
     def forward(self,x):
 

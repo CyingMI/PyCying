@@ -47,11 +47,7 @@ class LangLayer(nn.Module):
 
         self.att_linear = nn.Linear(d_model, d_model, bias=False)
 
-        self.register_buffer(
-            "theta",
-            10000 ** (2 * torch.arange(0, d_model) / d_model),
-        )
-        self.s_linear = nn.Linear(d_model, num_heads, bias=False)
+        self.s_weight = nn.Parameter(torch.randn(d_model, num_heads), requires_grad=True)
 
         self.nonlinear = nn.Sequential(
             nn.Linear(self.d_model, self.hidden_width),
@@ -90,13 +86,14 @@ class LangLayer(nn.Module):
     def _multi_head_attention(
         self,
         token_seq,
+        position_embeddings,
         padding_mask,
         causal_mask
     ):
         """Compute multi-head attention result."""
         batch_size, seq_len, _ = token_seq.shape
 
-        scores, values = self._get_score_value(token_seq)
+        scores, values = self._get_score_value(token_seq, position_embeddings)
 
         if padding_mask is not None:
             scores = scores.masked_fill(
@@ -120,27 +117,21 @@ class LangLayer(nn.Module):
 
     def _get_score_value(
         self,
-        token_seq
+        token_seq,
+        position_embeddings
     ):
         """Generate attention scores and value features."""
-        position_embeddings = torch.exp(
-            1j * torch.arange(
-                0,
-                token_seq.size(1),
-                device=token_seq.device
-            )[..., None] / self.theta[None, :]
-        )
 
-        q_tensor = self.q_tensor(token_seq) * position_embeddings
-        k_tensor = self.k_tensor(token_seq) * position_embeddings.conj()
+        q_tensor = self.q_tensor(token_seq)
+        k_tensor = self.k_tensor(token_seq)
 
         scores = torch.einsum(
-            "b t d, b s d -> b t s d",
+            "b t d, b s d, t s d, d n -> b t s n",
             q_tensor,
-            k_tensor
-        ).real
-
-        scores = self.s_linear(scores)
+            k_tensor,
+            position_embeddings,
+            self.s_weight
+        )
 
         values = self.v_linear(token_seq).view(*token_seq.shape[:-1], self.d_head, self.num_heads)
 
