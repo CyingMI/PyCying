@@ -27,6 +27,7 @@ class LangModel(nn.Module):
         num_heads,
         hidden_width,
         num_layers,
+        padding_idx=0
     ):
         super().__init__()
         self.d_model = d_model
@@ -36,12 +37,17 @@ class LangModel(nn.Module):
 
         # Input embedding layer: map token ids to model-dimension vectors
         self.embedding = nn.Embedding(
-            vocab_size, d_model, max_norm=d_model ** 0.5
+            vocab_size, d_model, max_norm=d_model ** 0.5, padding_idx=padding_idx
         )
 
         # Stack of OptLangLayer instances
         self.layers = nn.ModuleList(
             [LangLayer(d_model, num_heads, hidden_width) for _ in range(num_layers)]
+        )
+
+        self.register_buffer(
+            "theta",
+            10000 ** (2 * torch.arange(0, d_model) / d_model),
         )
 
         # Query weights for attention residual connections
@@ -71,11 +77,25 @@ class LangModel(nn.Module):
         # Embed tokens
         token_seq = [self.embedding(token_seq)]
 
+        position_embeddings = torch.exp(
+            1j * torch.arange(
+                0,
+                token_seq[0].size(1),
+                device=token_seq[0].device
+            )[..., None] / self.theta[None, :]
+        )
+
+        position_embeddings = torch.einsum(
+            't d, s d -> t s d',
+            position_embeddings,
+            position_embeddings.conj()
+        ).real
+
         for i in range(self.num_layers):
             # Compute normalized attention input and attention output
             att_input = self.norm(token_seq[-1])
             att_output = self.layers[i]._multi_head_attention(
-                att_input, padding_mask, causal_mask
+                att_input, position_embeddings, padding_mask, causal_mask
             )
             token_seq.append(att_output)
 
