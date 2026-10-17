@@ -121,7 +121,6 @@ class LangLayer(nn.Module):
         position_embeddings
     ):
         """Generate attention scores and value features."""
-
         q_tensor = self.q_tensor(token_seq)
         k_tensor = self.k_tensor(token_seq)
 
