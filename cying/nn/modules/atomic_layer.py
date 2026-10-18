@@ -1,14 +1,20 @@
 import torch
 import torch.nn as nn
 
+class SIREN(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, x):
+        return torch.sin(x)
+
 class AtomicLayer(nn.Module):
-    def __init__(self, d_model, hid_width, L, N, cutoff_r=6):
+    def __init__(self, d_model, hid_width, L, N):
         super().__init__()
         self.d_model = d_model
         self.hid_width = hid_width
         self.L = L
         self.N = N
-        self.cutoff_r = cutoff_r
 
         self.ato_weight = nn.Parameter(torch.zeros(N, d_model, d_model), requires_grad=True)
 
@@ -26,60 +32,68 @@ class AtomicLayer(nn.Module):
             nn.Linear(hid_width, d_model)
         )
 
-        self.fnn_cutoff = nn.Sequential(
-            nn.Linear(1, hid_width),
-            nn.SiLU(),
-            nn.Linear(hid_width, d_model)
+        self.env_tensor_env = nn.Sequential(
+            nn.Linear(d_model, d_model),
+            SIREN()
         )
+        self.env_tensor_ato = nn.Sequential(
+            nn.Linear(d_model, d_model),
+            SIREN()
+        )
+        self.env_cutoff = nn.Sequential(
+            nn.Linear(1, d_model),
+            SIREN()
+        )
+        self.env_tensor_linear = nn.Linear(d_model, d_model, bias=False)
+        self.env_merge_norm = nn.RMSNorm(d_model)
 
-        self.ato_norm_in = nn.RMSNorm(d_model)
-        self.ato_norm_out = nn.RMSNorm(d_model)
-        
         self.env_norm_in = nn.RMSNorm(d_model)
         self.env_norm_out = nn.RMSNorm(d_model)
 
-    def forward(self, ato_emb, ato_env, rel_disij, J0ij, J0ijk, padding, w):
-        srij = self.s5(rel_disij[...,None]) * (rel_disij[...,None] > 1e-2) * padding
+        self.ato_tensor_env = nn.Sequential(
+            nn.Linear(d_model, d_model),
+            SIREN()
+        )
+        self.ato_cutoff = nn.Sequential(
+            nn.Linear(1, d_model),
+            SIREN()
+        )
+        self.ato_tensor_linear = nn.Linear(d_model, d_model, bias=False)
 
-        env_probe = torch.einsum(
-            'B N M d, B N M O s -> B N O d s',
-            ato_env,# * srij,
-            J0ijk
-        ) + torch.einsum(
-            'B N d, B N M s -> B N M d s',
-            ato_emb,
-            J0ij
+        self.ato_norm_in = nn.RMSNorm(d_model)
+        self.ato_norm_out = nn.RMSNorm(d_model)
+
+        self.merge_norm = nn.RMSNorm(d_model)
+
+    def forward(self, ato_emb, neb_matrix, rel_disij, J0ij, J0ijk, srij):        
+        ato_env = torch.take_along_dim(
+            ato_emb[:,None,:],
+            neb_matrix[...,None],
+            dim=2
         )
 
+        ato_env = self.merge_norm(self.env_tensor_linear(self.env_tensor_ato(ato_emb)[...,None,:] * self.env_tensor_env(ato_env) * self.env_cutoff(rel_disij[...,None]) * srij) + ato_env)
+
         env_probe = torch.einsum(
-            'B N M n s, B N M n, s n m -> B N M m',
-            env_probe * w,
+            'B N M n, B N M O s, s n m -> B N O m',
             ato_env,
+            J0ijk,
             self.env_weight
         )
 
         ato_env = self.env_norm_in(env_probe + ato_env)
         ato_env = self.env_norm_out(self.fnn_env(ato_env) + ato_env)
 
-        env_field = torch.einsum(
-            'B N M d, B N M s -> B N d s',
-            ato_env * srij,
-            J0ij
-        )
+        ato_env = self.ato_tensor_linear(self.ato_tensor_env(ato_env) * self.ato_cutoff(rel_disij[...,None]) * srij)
 
         ato_probe = torch.einsum(
-            'B N n s, B N n, s n m -> B N m',
-            env_field * w,
-            ato_emb,
+            'B N M n, B N M s, s n m -> B N m',
+            ato_env,
+            J0ij,
             self.ato_weight
         )
 
         ato_emb = self.ato_norm_in(ato_probe + ato_emb)
         ato_emb = self.ato_norm_out(self.fnn_ato(ato_emb) + ato_emb)
 
-        return ato_emb, ato_env
-
-    def s5(self, x):
-        x = x / self.cutoff_r
-        x = x * (x < 1)
-        return (1 - x**5*(56 - 140*x + 120*x**2 - 35*x**3)) * self.fnn_cutoff(x) * (x < 1)
+        return ato_emb
