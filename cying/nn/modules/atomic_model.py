@@ -19,7 +19,7 @@ class AtomicModel(nn.Module):
         self.ato_emb = nn.Embedding(119, d_model, 0)
 
         self.layers = nn.ModuleList([
-            AtomicLayer(d_model, hid_width, L, N, cutoff_r) for _ in range(num_layers)
+            AtomicLayer(d_model, hid_width, L, N) for _ in range(num_layers)
         ])
 
         self.lin_out = nn.Linear(d_model, 1)
@@ -29,11 +29,6 @@ class AtomicModel(nn.Module):
         env_num = torch.take_along_dim(
             ato_num[:,None,:],
             neb_matrix,
-            dim=2
-        )
-        ato_env = torch.take_along_dim(
-            ato_emb[:,None,:],
-            neb_matrix[...,None],
             dim=2
         )
 
@@ -50,12 +45,14 @@ class AtomicModel(nn.Module):
 
         padding = env_num[...,None] > 0
         
-        J0ij = torch.special.bessel_j0(torch.einsum('B N M, L -> B N M L', rel_disij, self.k)) * (rel_disij[...,None] > 1e-2)
+        J0ij = torch.special.bessel_j0(torch.einsum('B N M, L -> B N M L', rel_disij, self.k)) * self.w * padding
 
-        J0ijk = torch.special.bessel_j0(torch.einsum('B N M O, L -> B N M O L', rel_disijk, self.k)) * (rel_disijk[...,None] > 1e-2)
+        J0ijk = torch.special.bessel_j0(torch.einsum('B N M O, L -> B N M O L', rel_disijk, self.k)) * self.w * padding[...,None]
         
+        srij = self.s5(rel_disij[...,None])
+
         for layer in self.layers:
-            ato_emb, ato_env = layer(ato_emb, ato_env, rel_disij, J0ij, J0ijk, padding, self.w)
+            ato_emb = layer(ato_emb, neb_matrix, rel_disij, J0ij, J0ijk, srij)
         
         return self.lin_out(ato_emb)
 
@@ -69,3 +66,9 @@ class AtomicModel(nn.Module):
         w = 0.5 * (b - a) * w
         
         return t, w
+
+    def s5(self, x):
+        x = x / self.cutoff_r
+        label = x < 1
+        x = x * label
+        return (1 - x**5*(56 - 140*x + 120*x**2 - 35*x**3)) * label
