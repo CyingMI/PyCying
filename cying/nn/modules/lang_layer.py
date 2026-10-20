@@ -6,12 +6,6 @@ multi-head frequency-domain attention and a nonlinear transformation.
 import torch
 import torch.nn as nn
 
-class SIREN(nn.Module):
-    def __init__(self):
-        super().__init__()
-
-    def forward(self, x):
-        return torch.sin(x)
 
 class LangLayer(nn.Module):
     """Operator language layer.
@@ -34,20 +28,11 @@ class LangLayer(nn.Module):
         self.hidden_width = hidden_width
         self.d_head = d_model // num_heads
 
-        self.q_tensor = nn.Sequential(
-            nn.Linear(d_model, d_model),
-            SIREN()
-        )
-        self.k_tensor = nn.Sequential(
-            nn.Linear(d_model, d_model),
-            SIREN()
-        )
-
+        self.q_tensor = nn.Linear(d_model, d_model, bias=False)
+        self.k_tensor = nn.Linear(d_model, d_model, bias=False)
         self.v_linear = nn.Linear(d_model, d_model, bias=False)
 
         self.att_linear = nn.Linear(d_model, d_model, bias=False)
-
-        self.s_weight = nn.Parameter(torch.randn(d_model, num_heads), requires_grad=True)
 
         self.nonlinear = nn.Sequential(
             nn.Linear(self.d_model, self.hidden_width),
@@ -55,11 +40,13 @@ class LangLayer(nn.Module):
             nn.Linear(self.hidden_width, self.d_model),
         )
 
-        self.norm = nn.RMSNorm(d_model, elementwise_affine=False)
+        self.att_norm = nn.RMSNorm(d_model)
+        self.out_norm = nn.RMSNorm(d_model)
 
     def forward(
         self,
         token_seq,
+        position_embeddings,
         padding_mask,
         causal_mask
     ):
@@ -73,13 +60,14 @@ class LangLayer(nn.Module):
         Returns:
             Tensor: Output features with shape (B, L, D).
         """
-        token_att = self.norm(self._multi_head_attention(
+        token_att = self.att_norm(self._multi_head_attention(
             token_seq,
+            position_embeddings,
             padding_mask,
             causal_mask,
         ) + token_seq)
 
-        token_out = self.norm(self.nonlinear(token_att) + token_att)
+        token_out = self.out_norm(self.nonlinear(token_att) + token_att)
         
         return token_out
 
@@ -121,17 +109,16 @@ class LangLayer(nn.Module):
         position_embeddings
     ):
         """Generate attention scores and value features."""
-        q_tensor = self.q_tensor(token_seq)
-        k_tensor = self.k_tensor(token_seq)
+        B, N = token_seq.shape[:2]
+        q_tensor = (self.q_tensor(token_seq) * position_embeddings).view(B,N,self.d_head,self.num_heads)
+        k_tensor = (self.k_tensor(token_seq) * position_embeddings).view(B,N,self.d_head,self.num_heads)
 
         scores = torch.einsum(
-            "b t d, b s d, t s d, d n -> b t s n",
+            "b t d n, b s d n -> b t s n",
             q_tensor,
-            k_tensor,
-            position_embeddings,
-            self.s_weight
-        )
+            k_tensor.conj()
+        ).real / self.d_head**0.5
 
-        values = self.v_linear(token_seq).view(*token_seq.shape[:-1], self.d_head, self.num_heads)
+        values = self.v_linear(token_seq).view(B,N,self.d_head,self.num_heads)
 
         return scores, values
