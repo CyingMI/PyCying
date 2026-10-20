@@ -27,11 +27,11 @@ import json
 from tokenizers import Tokenizer
 from torch.utils.data import Dataset, DataLoader
 
-scale = 1
-max_seq_len = 256
-batch_size = 24
+max_seq_len = 1024
+batch_size = 10
+grad_accum_steps = 32
 
-data_path = f'/root/autodl-tmp/data'
+data_path = f'/root/autodl-tmp/hf_sample_200G'
 tokenizer_path = f"./cci3_tokenizer.json"
 
 class CCI3(IterableDataset):
@@ -59,28 +59,18 @@ class CCI3(IterableDataset):
 
 tokenizer = Tokenizer.from_file(tokenizer_path)
 tokenizer.enable_truncation(max_length=max_seq_len)
+tokenizer.enable_padding(length=max_seq_len, pad_id=0)
 
-tokenizer.enable_padding(
-    length=max_seq_len,
-    pad_id=0
-)
+dataset = CCI3(data_path, tokenizer)
+dataloader = DataLoader(dataset, batch_size=batch_size)
 
-dataset = CCI3(
-    data_path,
-    tokenizer
-)
-
-dataloader = DataLoader(
-    dataset,
-    batch_size=batch_size
-)
-
+from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts
 from tqdm import tqdm
 
-epoch = 10**2
 lr = 1e-4
 optim = torch.optim.AdamW(opt_lang_model.parameters(), lr=lr)
 criterion = torch.nn.CrossEntropyLoss(ignore_index=0)
+scheduler = CosineAnnealingWarmRestarts(optim, T_0=400, T_mult=2, eta_min=1e-6)
 
 k = 1000
 
@@ -88,39 +78,47 @@ from torch.amp import autocast, GradScaler
 
 scaler = GradScaler()
 
-for i in range(epoch):
-    pbar = tqdm(dataloader)
+pbar = tqdm(dataloader)
+
+loss_epoch = []
+i = 1
+accum_count = 0
+
+for token_ids, tgt_ids in pbar:
     opt_lang_model.train()
-    loss_epoch = []
-    j = 1
-    for token_ids, tgt_ids in pbar:
-        optim.zero_grad()
-        token_ids = token_ids.to(device)
-        tgt_ids = tgt_ids.to(device)
-        
-        with autocast(device_type="cuda:0", dtype=torch.float16):
-            outputs = opt_lang_model(
-                token_seq=token_ids,
-                causal_mask=torch.triu(torch.ones(max_seq_len-1, max_seq_len-1), diagonal=1).bool().to(device)
-            )
-            loss = criterion(
-                outputs.view(-1, outputs.size(-1)),
-                tgt_ids.reshape(-1)
-            )
-        scaler.scale(loss).backward()
+    token_ids = token_ids.to(device)
+    tgt_ids = tgt_ids.to(device)
+
+    with autocast(device_type="cuda", dtype=torch.float16):
+        outputs = opt_lang_model(
+            token_seq=token_ids,
+            causal_mask=torch.triu(
+                torch.ones(max_seq_len-1, max_seq_len-1), diagonal=1
+            ).bool().to(device)
+        )
+        loss = criterion(
+            outputs.view(-1, outputs.size(-1)),
+            tgt_ids.reshape(-1)
+        )
+        loss = loss / grad_accum_steps
+
+    scaler.scale(loss).backward()
+    accum_count += 1
+
+    if accum_count == grad_accum_steps:
         scaler.step(optim)
         scaler.update()
+        optim.zero_grad()
+        scheduler.step()
+        accum_count = 0
 
-        loss_epoch.append(loss.item())
-        
-        pbar.set_description(f"Epoch {i+1}/{epoch} Loss {loss.item()*scale:.4e}")
+    loss_epoch.append(loss.item() * grad_accum_steps)
+    pbar.set_description(f"Loss {loss.item()*grad_accum_steps:.4e}")
 
-        if j % k == 0:
-            torch.save(opt_lang_model,'./models/model'+str(i)+'.pth')
-            torch.save(torch.tensor(loss_epoch), './loss_values/loss_values_'+str(i)+'.pth')
-            j = 1
-        else:
-            j += 1
-    opt_lang_model.eval()
-    torch.save(opt_lang_model,'./models/model'+str(i)+'.pth')
-    torch.save(torch.tensor(loss_epoch), './loss_values/loss_values_'+str(i)+'.pth')
+    if i % k == 0:
+        opt_lang_model.eval()
+        torch.save(opt_lang_model.state_dict(), f'./model.pth')
+        torch.save(torch.tensor(loss_epoch), f'./loss_values.pth')
+        i = 1
+    else:
+        i += 1

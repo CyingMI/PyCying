@@ -37,7 +37,7 @@ class LangModel(nn.Module):
 
         # Input embedding layer: map token ids to model-dimension vectors
         self.embedding = nn.Embedding(
-            vocab_size, d_model, max_norm=d_model ** 0.5, padding_idx=padding_idx
+            vocab_size, d_model, padding_idx=padding_idx
         )
 
         # Stack of OptLangLayer instances
@@ -52,9 +52,8 @@ class LangModel(nn.Module):
 
         # Query weights for attention residual connections
         self.q_weights = nn.Parameter(torch.zeros((num_layers * 2, d_model)))
-        self.norm = nn.RMSNorm(d_model, elementwise_affine=False)
 
-        # 输出线性层，将模型维度映射回词表大小
+        # Output layer
         self.linear_out = nn.Linear(d_model, vocab_size)
 
     def forward(
@@ -85,41 +84,37 @@ class LangModel(nn.Module):
             )[..., None] / self.theta[None, :]
         )
 
-        position_embeddings = torch.einsum(
-            't d, s d -> t s d',
-            position_embeddings,
-            position_embeddings.conj()
-        ).real
-
         for i in range(self.num_layers):
             # Compute normalized attention input and attention output
-            att_input = self.norm(token_seq[-1])
             att_output = self.layers[i]._multi_head_attention(
-                att_input, position_embeddings, padding_mask, causal_mask
+                token_seq[-1], position_embeddings, padding_mask, causal_mask
             )
             token_seq.append(att_output)
 
             # Mix attention output with previous states
             weights = []
             for j in range(i * 2 + 2):
-                weights.append(self.norm(token_seq[j]) @ self.q_weights[i * 2])
+                weights.append(token_seq[j] @ self.q_weights[i * 2])
             scores = torch.stack(weights, dim=-1).softmax(dim=-1)
-            token_seq[-1] = sum(
-                token_seq[j] * scores[..., j:j + 1] for j in range(i * 2 + 2)
+            token_seq[-1] = self.layers[i].att_norm(
+                sum(
+                    token_seq[j] * scores[..., j:j + 1] for j in range(i * 2 + 2)
+                ) + token_seq[-1]
             )
 
             # Apply nonlinear transformation
-            nonlin_input = self.norm(token_seq[-1])
-            nonlin_output = self.layers[i].nonlinear(nonlin_input)
+            nonlin_output = self.layers[i].nonlinear(token_seq[-1])
             token_seq.append(nonlin_output)
 
             # Mix nonlinear output with historical states
             weights = []
             for j in range(i * 2 + 3):
-                weights.append(self.norm(token_seq[j]) @ self.q_weights[i * 2 + 1])
+                weights.append(token_seq[j] @ self.q_weights[i * 2 + 1])
             scores = torch.stack(weights, dim=-1).softmax(dim=-1)
-            token_seq[-1] = sum(
-                token_seq[j] * scores[..., j:j + 1] for j in range(i * 2 + 3)
+            token_seq[-1] = self.layers[i].out_norm(
+                sum(
+                    token_seq[j] * scores[..., j:j + 1] for j in range(i * 2 + 3)
+                ) + token_seq[-1]
             )
 
-        return self.linear_out(self.norm(token_seq[-1]))
+        return self.linear_out(token_seq[-1])
